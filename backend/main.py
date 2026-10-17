@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from backend.database import (
     clear_all_user_entries,
+    compute_user_data_version,
     delete_meal,
     delete_workout,
     get_cached_dish,
@@ -127,6 +128,7 @@ def build_full_state(user_id: str = "default") -> Dict[str, Any]:
 
     return {
         "user_id": uid,
+        "version": compute_user_data_version(uid),
         "storage_mode": "postgres" if is_postgres_mode() else "sqlite",
         "dashboard": dashboard,
         "peripherals_catalog": PERIPHERALS_CATALOG,
@@ -236,6 +238,15 @@ def _execute_agent_actions(
                 summaries.append("Profil mis a jour")
 
     return summaries
+
+
+@app.get("/api/version")
+def api_get_version(
+    x_user_id: Optional[str] = Header(default=None),
+    user: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    uid = _resolve_uid(x_user_id, user)
+    return {"user_id": uid, "version": compute_user_data_version(uid)}
 
 
 @app.get("/api/state")
@@ -372,6 +383,22 @@ def api_clear_demo(
 
 if os.path.isdir(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+def serve_favicon_svg() -> FileResponse:
+    return FileResponse(os.path.join(FRONTEND_DIR, "favicon.svg"), media_type="image/svg+xml")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def serve_favicon_ico() -> FileResponse:
+    return FileResponse(os.path.join(FRONTEND_DIR, "icon-192.png"), media_type="image/png")
+
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+@app.get("/apple-touch-icon-precomposed.png", include_in_schema=False)
+def serve_apple_touch_icon() -> FileResponse:
+    return FileResponse(os.path.join(FRONTEND_DIR, "apple-touch-icon.png"), media_type="image/png")
 
 
 @app.get("/")

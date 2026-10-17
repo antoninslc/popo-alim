@@ -374,7 +374,7 @@ def ensure_user_initialized(user_id: str = "default", db: Optional[DBWrapper] = 
         db.execute("SELECT COUNT(*) AS cnt FROM meals WHERE user_id = ?", (uid,))
         meals_cnt = int((db.fetchone() or {}).get("cnt", 0))
         if meals_cnt == 0:
-            if uid in ("default", "antonin"):
+            if uid in ("default", "antonin", "dev"):
                 seed_demo_data(db, user_id=uid)
             else:
                 display_name = "Pauline" if uid == "pauline" else ("Antonin" if uid == "antonin" else uid.capitalize())
@@ -393,7 +393,11 @@ def ensure_user_initialized(user_id: str = "default", db: Optional[DBWrapper] = 
                 )
                 db.commit()
     else:
-        display_name = "Pauline" if uid == "pauline" else ("Antonin" if uid == "antonin" else uid.capitalize())
+        display_name = (
+            "Pauline"
+            if uid == "pauline"
+            else ("Antonin" if uid == "antonin" else ("Dev" if uid == "dev" else uid.capitalize()))
+        )
         db.execute(
             """
             UPDATE chat_messages
@@ -1001,3 +1005,56 @@ def insert_chat_message(
         "actions_summary": actions_summary.strip(),
         "created_at": now_iso,
     }
+
+
+def compute_user_data_version(user_id: str = "default") -> str:
+    """Calcule une empreinte rapide de version pour l'etat des donnees d'un utilisateur."""
+    import hashlib
+
+    uid = normalize_user_id(user_id)
+    conn = get_connection()
+    ensure_user_initialized(uid, conn)
+
+    conn.execute(
+        "SELECT sex, age, height_cm, weight_kg, activity_level, goal, dietary_tags_json, excluded_foods, custom_targets_enabled, custom_targets_json, llm_provider, llm_model FROM user_profiles WHERE user_id = ?",
+        (uid,),
+    )
+    prof = conn.fetchone() or {}
+
+    conn.execute(
+        "SELECT id, meal_date, meal_type, dish_text, peripherals_json, portion_size, nutrients_json FROM meals WHERE user_id = ? ORDER BY id ASC",
+        (uid,),
+    )
+    meals_rows = conn.fetchall()
+
+    conn.execute(
+        "SELECT id, workout_date, category, title, duration_min, intensity, status, expenditure_json FROM workouts WHERE user_id = ? ORDER BY id ASC",
+        (uid,),
+    )
+    workouts_rows = conn.fetchall()
+
+    conn.execute(
+        "SELECT day_date, marked_complete FROM day_status WHERE user_id = ? ORDER BY day_date ASC",
+        (uid,),
+    )
+    ds_rows = conn.fetchall()
+
+    conn.execute(
+        "SELECT id, role, content, actions_summary, created_at FROM chat_messages WHERE user_id = ? ORDER BY id DESC LIMIT 20",
+        (uid,),
+    )
+    chat_rows = conn.fetchall()
+    conn.close()
+
+    payload = {
+        "date": date.today().isoformat(),
+        "uid": uid,
+        "prof": dict(prof),
+        "meals": [dict(r) for r in meals_rows],
+        "workouts": [dict(r) for r in workouts_rows],
+        "day_status": [dict(r) for r in ds_rows],
+        "chat": [dict(r) for r in chat_rows],
+    }
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
