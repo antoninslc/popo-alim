@@ -46,24 +46,6 @@ body {
     padding: 0 24px;
 }
 
-/* Top Frosted Navigation */
-.apple-nav {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: rgba(245, 245, 247, 0.78);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: 1px solid var(--border-hairline);
-}
-
-.nav-inner {
-    height: 58px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
 /* Launcher Overlay */
 .launcher-overlay {
     position: fixed;
@@ -149,36 +131,9 @@ body {
     color: var(--ink-primary);
 }
 
-.segmented-nav {
-    display: inline-flex;
-    background: rgba(118, 118, 128, 0.12);
-    padding: 3px;
-    border-radius: var(--radius-pill);
-}
-
-.seg-tab {
-    border: none;
-    background: transparent;
-    font-family: var(--font-apple);
-    font-size: 0.81rem;
-    font-weight: 500;
-    color: var(--ink-secondary);
-    padding: 6px 16px;
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.seg-tab.active {
-    background: var(--bg-card);
-    color: var(--ink-primary);
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.04);
-}
-
 /* Main Layout */
 .page-container {
-    padding-top: 28px;
+    padding-top: 32px;
     padding-bottom: 72px;
 }
 
@@ -206,13 +161,43 @@ body {
     gap: 12px;
 }
 
+.hero-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 4px;
+    margin-bottom: 2px;
+}
+
 .hero-greeting {
-    font-size: 1.65rem;
+    font-size: 1.7rem;
     font-weight: 700;
     letter-spacing: -0.03em;
     color: var(--ink-primary);
-    padding-left: 4px;
-    margin-bottom: 2px;
+}
+
+.icon-gear-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: var(--bg-card);
+    color: var(--ink-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+    transition: transform 0.2s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    flex-shrink: 0;
+}
+
+.icon-gear-btn:hover {
+    color: var(--ink-primary);
+    border-color: rgba(0, 0, 0, 0.16);
+    transform: rotate(25deg);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
 }
 
 .spotlight-bar {
@@ -732,18 +717,85 @@ body {
 }
 
 /* PAGE 2 : REGLAGES */
+.settings-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 4px;
+    flex-wrap: wrap;
+}
+
+.settings-top-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.back-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--bg-card);
+    color: var(--ink-primary);
+    font-family: var(--font-apple);
+    font-size: 0.84rem;
+    font-weight: 500;
+    padding: 7px 14px 7px 10px;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.back-pill-btn:hover {
+    border-color: rgba(0, 0, 0, 0.2);
+    transform: translateX(-1px);
+}
+
+.settings-page-title {
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--ink-primary);
+}
+
+.settings-profile-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--ink-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.settings-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
 .settings-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 22px;
-    align-items: start;
+    gap: 20px;
+    align-items: stretch;
 }
 
 .settings-panel {
     padding: 24px 26px;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 16px;
+}
+
+.panel-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .form-grid-2 {
@@ -755,24 +807,24 @@ body {
 .apple-field {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
 }
 
 .apple-field label {
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 500;
     color: var(--ink-secondary);
 }
 
 .apple-field input,
 .apple-field select {
-    height: 38px;
+    height: 40px;
     padding: 0 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 11px;
+    border: 1px solid rgba(0, 0, 0, 0.10);
     background: var(--bg-grouped);
     font-family: var(--font-apple);
-    font-size: 0.86rem;
+    font-size: 0.87rem;
     color: var(--ink-primary);
     outline: none;
     transition: background-color 0.15s ease, border-color 0.15s ease;
@@ -781,25 +833,31 @@ body {
 .apple-field input:focus,
 .apple-field select:focus {
     background: var(--bg-card);
-    border-color: var(--apple-blue);
+    border-color: var(--ink-primary);
 }
 
 .pills-select-group {
     display: flex;
     flex-wrap: wrap;
-    gap: 7px;
+    gap: 8px;
 }
 
 .pill-checkbox {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 11px;
+    padding: 6px 12px;
     border-radius: var(--radius-pill);
     background: var(--bg-grouped);
-    font-size: 0.78rem;
+    font-size: 0.79rem;
     color: var(--ink-secondary);
     cursor: pointer;
+    border: 1px solid transparent;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.pill-checkbox:hover {
+    border-color: rgba(0, 0, 0, 0.12);
 }
 
 .settings-feedback {
@@ -830,15 +888,51 @@ body {
 .settings-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 10px;
-    margin-top: 6px;
+    margin-top: auto;
+    padding-top: 4px;
     flex-wrap: wrap;
 }
 
-.settings-secondary-actions {
+.account-actions-stack {
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    background: var(--bg-grouped);
+    border-radius: var(--radius-inner);
+    padding: 4px 16px;
+}
+
+.account-action-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.account-action-row:last-child {
+    border-bottom: none;
+}
+
+.account-action-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.account-action-title {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--ink-primary);
+}
+
+.account-action-desc {
+    font-size: 0.76rem;
+    color: var(--ink-tertiary);
+    line-height: 1.35;
 }
 
 .apple-btn-primary {
@@ -848,33 +942,52 @@ body {
     font-family: var(--font-apple);
     font-size: 0.83rem;
     font-weight: 600;
-    padding: 9px 18px;
+    padding: 10px 18px;
     border-radius: var(--radius-pill);
     cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.apple-btn-primary:hover {
+    opacity: 0.9;
 }
 
 .apple-btn-secondary {
-    border: none;
-    background: var(--bg-grouped);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--bg-card);
     color: var(--ink-primary);
     font-family: var(--font-apple);
     font-size: 0.78rem;
-    font-weight: 500;
+    font-weight: 600;
     padding: 8px 14px;
     border-radius: var(--radius-pill);
     cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.apple-btn-secondary:hover {
+    border-color: rgba(0, 0, 0, 0.22);
 }
 
 .apple-btn-danger {
     border: none;
-    background: rgba(255, 59, 48, 0.1);
+    background: rgba(255, 59, 48, 0.12);
     color: var(--apple-red);
     font-family: var(--font-apple);
     font-size: 0.78rem;
-    font-weight: 500;
+    font-weight: 600;
     padding: 8px 14px;
     border-radius: var(--radius-pill);
     cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease;
+}
+
+.apple-btn-danger:hover {
+    background: rgba(255, 59, 48, 0.2);
 }
 
 @media (max-width: 860px) {
@@ -892,7 +1005,7 @@ body {
     }
 
     .page-container {
-        padding-top: 16px;
+        padding-top: 20px;
         padding-bottom: 48px;
     }
 
@@ -900,35 +1013,35 @@ body {
         gap: 16px;
     }
 
-    /* Header & Navigation */
-    .nav-inner {
-        height: auto;
-        min-height: 54px;
-        padding-top: 8px;
-        padding-bottom: 8px;
-        gap: 10px;
+    .hero-greeting {
+        font-size: 1.45rem;
     }
 
-    .brand-lockup {
-        gap: 7px;
-        min-width: 0;
+    .icon-gear-btn {
+        width: 38px;
+        height: 38px;
     }
 
-    .brand-title {
-        font-size: 0.92rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+    .launcher-modal {
+        padding: 28px 20px;
     }
 
-    .segmented-nav {
-        flex-shrink: 0;
+    .launcher-profiles-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
     }
 
-    .seg-tab {
-        font-size: 0.76rem;
-        padding: 5px 11px;
-        white-space: nowrap;
+    .launcher-profile-card {
+        flex-direction: row;
+        justify-content: flex-start;
+        padding: 16px 20px;
+        gap: 16px;
+    }
+
+    .launcher-avatar {
+        width: 48px;
+        height: 48px;
+        font-size: 1.2rem;
     }
 
     /* Spotlight bar & Suggestions */
@@ -1065,7 +1178,20 @@ body {
         font-size: 1.05rem;
     }
 
-    /* Page Reglages */
+    /* Page Reglages Mobile */
+    .settings-top-bar {
+        gap: 10px;
+    }
+
+    .settings-page-title {
+        font-size: 1.35rem;
+    }
+
+    .settings-layout,
+    .settings-grid {
+        gap: 16px;
+    }
+
     .settings-panel {
         padding: 18px 16px;
     }
@@ -1080,16 +1206,21 @@ body {
         align-items: stretch;
     }
 
-    .settings-footer .apple-btn-primary,
-    .settings-secondary-actions button {
+    .settings-footer .apple-btn-primary {
         width: 100%;
         text-align: center;
         justify-content: center;
     }
 
-    .settings-secondary-actions {
+    .account-action-row {
         flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .account-action-row button {
         width: 100%;
+        text-align: center;
     }
 }
 

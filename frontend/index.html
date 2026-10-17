@@ -30,21 +30,21 @@
         </div>
     </div>
 
-    <header class="apple-nav">
-        <div class="container nav-inner">
-            <nav class="segmented-nav" role="tablist">
-                <button type="button" class="seg-tab active" data-page="main">Aujourd'hui &amp; 7j</button>
-                <button type="button" class="seg-tab" data-page="settings">Réglages</button>
-            </nav>
-        </div>
-    </header>
-
     <main class="container page-container">
         <!-- PAGE 1 : PRINCIPALE -->
         <section id="page-main" class="page-view active">
             <!-- 1. HAUT : BARRE D'INTERACTION STYLE SPOTLIGHT + REPONSE UNIQUE -->
             <section class="hero-chat-section">
-                <h1 class="hero-greeting" id="hero-greeting">Bonjour Pauline</h1>
+                <div class="hero-top-bar">
+                    <h1 class="hero-greeting" id="hero-greeting">Bonjour Pauline</h1>
+                    <button type="button" class="icon-gear-btn" id="open-settings-btn" aria-label="Ouvrir les réglages" title="Réglages">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                    </button>
+                </div>
+
                 <form id="chat-form" class="spotlight-bar">
                     <input
                         type="text"
@@ -140,113 +140,181 @@
 
         <!-- PAGE 2 : REGLAGES -->
         <section id="page-settings" class="page-view">
-            <form id="settings-form" class="settings-grid">
-                <div class="apple-card settings-panel">
-                    <h2 class="card-title">Profil physiologique</h2>
-                    <p class="card-subtitle">Base de calcul de vos besoins quotidiens hors sport</p>
+            <div class="settings-top-bar">
+                <div class="settings-top-left">
+                    <button type="button" class="back-pill-btn" id="close-settings-btn" aria-label="Retour à l'accueil">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        <span>Retour</span>
+                    </button>
+                    <h1 class="settings-page-title">Réglages</h1>
+                </div>
+                <span class="settings-profile-badge" id="settings-active-profile-label">Profil : Pauline</span>
+            </div>
 
-                    <div class="form-grid-2">
+            <form id="settings-form" class="settings-layout">
+                <!-- LIGNE HAUT : PROFIL PHYSIOLOGIQUE & PREFERENCES ALIMENTAIRES -->
+                <div class="settings-grid">
+                    <!-- 1. Profil physiologique -->
+                    <div class="apple-card settings-panel">
+                        <div class="panel-header">
+                            <h2 class="card-title">Profil physiologique</h2>
+                            <p class="card-subtitle">Base de calcul de vos besoins quotidiens hors sport</p>
+                        </div>
+
+                        <div class="form-grid-2">
+                            <div class="apple-field">
+                                <label for="prof-sex">Sexe</label>
+                                <select id="prof-sex">
+                                    <option value="H">Homme</option>
+                                    <option value="F">Femme</option>
+                                </select>
+                            </div>
+                            <div class="apple-field">
+                                <label for="prof-age">Âge</label>
+                                <input type="number" id="prof-age" min="15" max="99" required>
+                            </div>
+                            <div class="apple-field">
+                                <label for="prof-height">Taille (cm)</label>
+                                <input type="number" id="prof-height" min="120" max="230" step="0.5" required>
+                            </div>
+                            <div class="apple-field">
+                                <label for="prof-weight">Poids (kg)</label>
+                                <input type="number" id="prof-weight" min="35" max="200" step="0.1" required>
+                            </div>
+                        </div>
+
                         <div class="apple-field">
-                            <label for="prof-sex">Sexe</label>
-                            <select id="prof-sex">
-                                <option value="H">Homme</option>
-                                <option value="F">Femme</option>
+                            <label for="prof-activity">Activité quotidienne (hors sport)</label>
+                            <select id="prof-activity">
+                                <option value="sedentaire">Sédentaire / Bureau</option>
+                                <option value="modere">Actif au quotidien</option>
+                                <option value="actif">Très dynamique</option>
+                                <option value="tres_actif">Métier physique</option>
                             </select>
                         </div>
+
                         <div class="apple-field">
-                            <label for="prof-age">Âge</label>
-                            <input type="number" id="prof-age" min="15" max="99" required>
+                            <label for="prof-goal">Objectif</label>
+                            <select id="prof-goal">
+                                <option value="maintien">Maintien &amp; Équilibre</option>
+                                <option value="performance">Performance &amp; Énergie</option>
+                                <option value="prise_masse">Prise de muscle</option>
+                                <option value="seche">Affûtage / Sèche</option>
+                            </select>
                         </div>
-                        <div class="apple-field">
-                            <label for="prof-height">Taille (cm)</label>
-                            <input type="number" id="prof-height" min="120" max="230" step="0.5" required>
-                        </div>
-                        <div class="apple-field">
-                            <label for="prof-weight">Poids (kg)</label>
-                            <input type="number" id="prof-weight" min="35" max="200" step="0.1" required>
+
+                        <div id="physio-save-feedback" class="settings-feedback hidden"></div>
+
+                        <div class="settings-footer">
+                            <button type="button" class="apple-btn-primary" id="save-physio-btn">Enregistrer le profil</button>
                         </div>
                     </div>
 
-                    <div class="apple-field">
-                        <label for="prof-activity">Activité quotidienne (hors sport)</label>
-                        <select id="prof-activity">
-                            <option value="sedentaire">Sédentaire / Bureau</option>
-                            <option value="modere">Actif au quotidien</option>
-                            <option value="actif">Très dynamique</option>
-                            <option value="tres_actif">Métier physique</option>
-                        </select>
-                    </div>
+                    <!-- 2. Preferences alimentaires -->
+                    <div class="apple-card settings-panel">
+                        <div class="panel-header">
+                            <h2 class="card-title">Préférences alimentaires</h2>
+                            <p class="card-subtitle">Adaptation des idées de repas et conseils nutritionnels</p>
+                        </div>
 
-                    <div class="apple-field">
-                        <label for="prof-goal">Objectif</label>
-                        <select id="prof-goal">
-                            <option value="maintien">Maintien &amp; Équilibre</option>
-                            <option value="performance">Performance &amp; Énergie</option>
-                            <option value="prise_masse">Prise de muscle</option>
-                            <option value="seche">Affûtage / Sèche</option>
-                        </select>
-                    </div>
+                        <div class="apple-field">
+                            <label>Régimes &amp; exclusions</label>
+                            <div class="pills-select-group" id="prof-diet-tags">
+                                <label class="pill-checkbox"><input type="checkbox" value="vegetarien"><span>Végétarien</span></label>
+                                <label class="pill-checkbox"><input type="checkbox" value="vegan"><span>Vegan</span></label>
+                                <label class="pill-checkbox"><input type="checkbox" value="sans_porc"><span>Sans porc</span></label>
+                                <label class="pill-checkbox"><input type="checkbox" value="sans_poisson"><span>Sans poisson</span></label>
+                                <label class="pill-checkbox"><input type="checkbox" value="sans_boeuf"><span>Sans bœuf</span></label>
+                                <label class="pill-checkbox"><input type="checkbox" value="sans_lactose"><span>Sans lactose</span></label>
+                            </div>
+                        </div>
 
-                    <div id="physio-save-feedback" class="settings-feedback hidden"></div>
+                        <div class="apple-field">
+                            <label for="prof-excluded">Aliments refusés (séparés par virgule)</label>
+                            <input type="text" id="prof-excluded" placeholder="Ex: choux, abats, crevettes, coriandre...">
+                        </div>
 
-                    <div class="settings-footer">
-                        <button type="button" class="apple-btn-primary" id="save-physio-btn">Enregistrer le profil</button>
+                        <div id="prefs-save-feedback" class="settings-feedback hidden"></div>
+
+                        <div class="settings-footer">
+                            <button type="button" class="apple-btn-primary" id="save-prefs-btn">Enregistrer les préférences</button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="apple-card settings-panel">
-                    <h2 class="card-title">Préférences &amp; Moteur IA</h2>
-                    <p class="card-subtitle">Personnalisation des recommandations et connexion API</p>
-
-                    <div class="apple-field">
-                        <label>Exclusions alimentaires</label>
-                        <div class="pills-select-group" id="prof-diet-tags">
-                            <label class="pill-checkbox"><input type="checkbox" value="vegetarien"><span>Végétarien</span></label>
-                            <label class="pill-checkbox"><input type="checkbox" value="vegan"><span>Vegan</span></label>
-                            <label class="pill-checkbox"><input type="checkbox" value="sans_porc"><span>Sans porc</span></label>
-                            <label class="pill-checkbox"><input type="checkbox" value="sans_poisson"><span>Sans poisson</span></label>
-                            <label class="pill-checkbox"><input type="checkbox" value="sans_boeuf"><span>Sans bœuf</span></label>
-                            <label class="pill-checkbox"><input type="checkbox" value="sans_lactose"><span>Sans lactose</span></label>
+                <!-- LIGNE BAS : CONFIGURATION IA & GESTION DU COMPTE / DONNEES -->
+                <div class="settings-grid">
+                    <!-- 3. Configuration IA -->
+                    <div class="apple-card settings-panel">
+                        <div class="panel-header">
+                            <h2 class="card-title">Configuration IA</h2>
+                            <p class="card-subtitle">Fournisseur, modèle et clé API d'analyse nutritionnelle</p>
                         </div>
-                    </div>
 
-                    <div class="apple-field">
-                        <label for="prof-excluded">Aliments refusés (séparés par virgule)</label>
-                        <input type="text" id="prof-excluded" placeholder="Ex: choux, abats, crevettes...">
-                    </div>
+                        <div class="form-grid-2">
+                            <div class="apple-field">
+                                <label for="prof-llm-provider">Fournisseur IA</label>
+                                <select id="prof-llm-provider">
+                                    <option value="auto">Hybride Auto (détecte la clé)</option>
+                                    <option value="gemini">Google Gemini Studio</option>
+                                    <option value="groq">Groq Cloud (Llama 3.3)</option>
+                                    <option value="openrouter">OpenRouter (Modèles :free)</option>
+                                    <option value="openai">OpenAI (GPT-4o-mini)</option>
+                                    <option value="opencode">OpenCode</option>
+                                    <option value="local_hybrid">100% Local sans clé API</option>
+                                </select>
+                            </div>
+                            <div class="apple-field">
+                                <label for="prof-llm-model">Modèle</label>
+                                <input type="text" id="prof-llm-model" placeholder="gemini-2.0-flash">
+                            </div>
+                        </div>
 
-                    <div class="form-grid-2">
                         <div class="apple-field">
-                            <label for="prof-llm-provider">Moteur IA</label>
-                            <select id="prof-llm-provider">
-                                <option value="auto">Hybride Auto (détecte la clé)</option>
-                                <option value="opencode">OpenCode (glm-5.3-flash-free)</option>
-                                <option value="gemini">Google Gemini Studio (Gratuit)</option>
-                                <option value="groq">Groq Cloud (Gratuit - Llama 3.3)</option>
-                                <option value="openrouter">OpenRouter (Modèles :free)</option>
-                                <option value="openai">OpenAI (GPT-4o-mini)</option>
-                                <option value="local_hybrid">100% Local sans clé API</option>
-                            </select>
+                            <label for="prof-api-key">Clé API personnelle (optionnel si configurée sur le serveur)</label>
+                            <input type="password" id="prof-api-key" placeholder="Clé AIza... (Gemini), gsk_... (Groq) ou sk-or-...">
                         </div>
-                        <div class="apple-field">
-                            <label for="prof-llm-model">Modèle</label>
-                            <input type="text" id="prof-llm-model" placeholder="glm-5.3-flash-free / gemini-2.0-flash">
+
+                        <div id="settings-save-feedback" class="settings-feedback hidden"></div>
+
+                        <div class="settings-footer">
+                            <button type="submit" class="apple-btn-primary" id="save-settings-btn">Tester &amp; Enregistrer l'IA</button>
                         </div>
                     </div>
 
-                    <div class="apple-field">
-                        <label for="prof-api-key">Clé API (stockée localement)</label>
-                        <input type="password" id="prof-api-key" placeholder="Clé OpenCode Zen, AIza... (Gemini), gsk_... (Groq) ou sk-or-...">
-                    </div>
+                    <!-- 4. Compte & Donnees -->
+                    <div class="apple-card settings-panel">
+                        <div class="panel-header">
+                            <h2 class="card-title">Session &amp; Données</h2>
+                            <p class="card-subtitle">Changement d'utilisateur et gestion de votre historique</p>
+                        </div>
 
-                    <div id="settings-save-feedback" class="settings-feedback hidden"></div>
+                        <div class="account-actions-stack">
+                            <div class="account-action-row">
+                                <div class="account-action-info">
+                                    <span class="account-action-title">Changer de profil</span>
+                                    <span class="account-action-desc">Revenir à l'écran de sélection (Pauline / Antonin)</span>
+                                </div>
+                                <button type="button" class="apple-btn-secondary" id="logout-profile-btn">Se déconnecter</button>
+                            </div>
 
-                    <div class="settings-footer">
-                        <button type="submit" class="apple-btn-primary" id="save-settings-btn">Enregistrer</button>
-                        <div class="settings-secondary-actions">
-                            <button type="button" class="apple-btn-secondary" id="reset-demo-btn">Données de démo</button>
-                            <button type="button" class="apple-btn-danger" id="clear-data-btn">Réinitialiser</button>
-                            <button type="button" class="apple-btn-secondary" id="logout-profile-btn">Se déconnecter</button>
+                            <div class="account-action-row">
+                                <div class="account-action-info">
+                                    <span class="account-action-title">Jeu d'essai sur 7 jours</span>
+                                    <span class="account-action-desc">Charger une semaine type de repas et séances</span>
+                                </div>
+                                <button type="button" class="apple-btn-secondary" id="reset-demo-btn">Données de démo</button>
+                            </div>
+
+                            <div class="account-action-row">
+                                <div class="account-action-info">
+                                    <span class="account-action-title">Remise à zéro</span>
+                                    <span class="account-action-desc">Effacer tous les repas, séances et messages de ce profil</span>
+                                </div>
+                                <button type="button" class="apple-btn-danger" id="clear-data-btn">Réinitialiser</button>
+                            </div>
                         </div>
                     </div>
                 </div>

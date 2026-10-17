@@ -58,11 +58,15 @@ function setSelectedProfile(profileId) {
 
 function applyHeaderProfileBranding(profileId) {
     const greetingEl = document.getElementById("hero-greeting");
+    const settingsBadgeEl = document.getElementById("settings-active-profile-label");
     const isAntonin = profileId === "antonin";
     const firstName = isAntonin ? "Antonin" : "Pauline";
 
     if (greetingEl) {
         greetingEl.textContent = `Bonjour ${firstName}`;
+    }
+    if (settingsBadgeEl) {
+        settingsBadgeEl.textContent = `Profil : ${firstName}`;
     }
     document.title = isAntonin ? "Suivi d'Antonin" : "L'alimentation de Popo";
 }
@@ -89,14 +93,23 @@ async function apiCall(path, options = {}) {
     return resp.json();
 }
 
-function initPageNavigationAndDrawers() {
-    document.querySelectorAll(".seg-tab").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            const target = btn.dataset.page;
-            document.querySelectorAll(".seg-tab").forEach((b) => b.classList.toggle("active", b === btn));
-            document.querySelectorAll(".page-view").forEach((v) => v.classList.toggle("active", v.id === `page-${target}`));
-        });
+function showPage(pageName) {
+    document.querySelectorAll(".page-view").forEach((v) => {
+        v.classList.toggle("active", v.id === `page-${pageName}`);
     });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function initPageNavigationAndDrawers() {
+    const openSettingsBtn = document.getElementById("open-settings-btn");
+    const closeSettingsBtn = document.getElementById("close-settings-btn");
+
+    if (openSettingsBtn) {
+        openSettingsBtn.addEventListener("click", () => showPage("settings"));
+    }
+    if (closeSettingsBtn) {
+        closeSettingsBtn.addEventListener("click", () => showPage("main"));
+    }
 
     // Historique du chat
     const toggleChatHistoryBtn = document.getElementById("toggle-chat-history-btn");
@@ -504,6 +517,37 @@ function initInteractions() {
         }
     });
 
+    const savePrefsBtn = document.getElementById("save-prefs-btn");
+    if (savePrefsBtn) {
+        savePrefsBtn.addEventListener("click", async () => {
+            const prefsFeedback = document.getElementById("prefs-save-feedback");
+            savePrefsBtn.disabled = true;
+            savePrefsBtn.textContent = "Enregistrement...";
+            prefsFeedback.className = "settings-feedback";
+            prefsFeedback.textContent = "Mise à jour des préférences alimentaires...";
+
+            try {
+                const updated = await apiCall("/api/profile", {
+                    method: "PUT",
+                    body: JSON.stringify(collectProfilePayload(false)),
+                });
+                renderState(updated);
+                prefsFeedback.className = "settings-feedback is-success";
+                prefsFeedback.textContent = "Préférences alimentaires enregistrées avec succès.";
+                savePrefsBtn.textContent = "Enregistré";
+                setTimeout(() => {
+                    savePrefsBtn.textContent = "Enregistrer les préférences";
+                }, 2200);
+            } catch (err) {
+                prefsFeedback.className = "settings-feedback is-warning";
+                prefsFeedback.textContent = "Erreur lors de l'enregistrement : " + err.message;
+                savePrefsBtn.textContent = "Enregistrer les préférences";
+            } finally {
+                savePrefsBtn.disabled = false;
+            }
+        });
+    }
+
     document.getElementById("settings-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         const saveBtn = document.getElementById("save-settings-btn");
@@ -511,7 +555,7 @@ function initInteractions() {
         saveBtn.disabled = true;
         saveBtn.textContent = "Vérification...";
         feedbackEl.className = "settings-feedback";
-        feedbackEl.textContent = "Enregistrement et test de la clé API en cours...";
+        feedbackEl.textContent = "Enregistrement et test de la connexion IA en cours...";
 
         try {
             const updated = await apiCall("/api/profile", {
@@ -521,15 +565,15 @@ function initInteractions() {
             renderState(updated);
             const verif = updated.llm_verification || {};
             feedbackEl.className = `settings-feedback ${verif.ok === false ? "is-warning" : "is-success"}`;
-            feedbackEl.textContent = verif.message || "Réglages enregistrés avec succès.";
+            feedbackEl.textContent = verif.message || "Configuration IA enregistrée avec succès.";
             saveBtn.textContent = "Enregistré";
             setTimeout(() => {
-                saveBtn.textContent = "Enregistrer";
+                saveBtn.textContent = "Tester & Enregistrer l'IA";
             }, 2200);
         } catch (err) {
             feedbackEl.className = "settings-feedback is-warning";
             feedbackEl.textContent = "Erreur lors de l'enregistrement : " + err.message;
-            saveBtn.textContent = "Enregistrer";
+            saveBtn.textContent = "Tester & Enregistrer l'IA";
         } finally {
             saveBtn.disabled = false;
         }
@@ -551,8 +595,7 @@ function initInteractions() {
     if (logoutProfileBtn && launcherOverlay) {
         logoutProfileBtn.addEventListener("click", () => {
             localStorage.removeItem(STORAGE_KEY_PROFILE);
-            const mainTab = document.querySelector(".seg-tab[data-page='main']");
-            if (mainTab) mainTab.click();
+            showPage("main");
             launcherOverlay.classList.remove("hidden");
         });
     }
