@@ -33,6 +33,7 @@ from backend.llm_service import (
     call_llm_chat_agent,
     compose_contextual_reply,
     evaluate_dish_hybrid,
+    has_env_gemini_key,
     interpret_chat_locally,
     verify_llm_connection,
 )
@@ -116,6 +117,7 @@ def build_full_state(user_id: str = "default") -> Dict[str, Any]:
     safe_profile = dict(profile)
     safe_profile["user_id"] = uid
     safe_profile["api_key"] = profile.get("api_key", "")
+    safe_profile["env_api_key_active"] = has_env_gemini_key()
     safe_profile["calculated_baseline"] = calculate_baseline_targets(
         {**profile, "custom_targets_enabled": False}
     )

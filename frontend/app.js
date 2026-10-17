@@ -359,7 +359,13 @@ function renderState(state) {
     document.getElementById("prof-excluded").value = prof.excluded_foods || "";
     document.getElementById("prof-llm-provider").value = prof.llm_provider || "auto";
     document.getElementById("prof-llm-model").value = prof.llm_model || "gemini-2.0-flash";
-    document.getElementById("prof-api-key").value = prof.api_key || "";
+    const apiKeyInput = document.getElementById("prof-api-key");
+    apiKeyInput.value = prof.api_key || "";
+    if (prof.env_api_key_active && !prof.api_key) {
+        apiKeyInput.placeholder = "Cle GEMINI_API_KEY du serveur active par defaut (optionnel)";
+    } else {
+        apiKeyInput.placeholder = "Cle AIza... (Gemini), gsk_... (Groq) ou sk-or-...";
+    }
 
     const activeTags = new Set(prof.dietary_tags || []);
     document.querySelectorAll("#prof-diet-tags input[type='checkbox']").forEach((cb) => {

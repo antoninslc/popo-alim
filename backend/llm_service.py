@@ -91,6 +91,29 @@ def _extract_json_object(raw_text: str) -> Dict[str, Any]:
     return json.loads(cleaned)
 
 
+def _load_dotenv_if_present() -> None:
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_path = os.path.join(root_dir, ".env")
+    if not os.path.isfile(env_path):
+        return
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                key = k.strip()
+                val = v.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except Exception:
+        pass
+
+
+_load_dotenv_if_present()
+
+
 OPENAI_COMPATIBLE_PROVIDERS: Dict[str, Tuple[str, str]] = {
     "opencode": ("https://opencode.ai/inference/openai/v1/chat/completions", "glm-5.3-flash-free"),
     "groq": ("https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile"),
@@ -99,19 +122,30 @@ OPENAI_COMPATIBLE_PROVIDERS: Dict[str, Tuple[str, str]] = {
 }
 
 
+def has_env_gemini_key() -> bool:
+    _load_dotenv_if_present()
+    return bool((os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip())
+
+
 def _resolve_provider_and_key(profile_settings: Dict[str, Any]) -> Tuple[str, str, str]:
+    _load_dotenv_if_present()
     provider = (profile_settings.get("llm_provider") or "auto").lower().strip()
     api_key = (profile_settings.get("api_key") or "").strip()
-    model_name = (profile_settings.get("llm_model") or "").strip()
+    model_name = (profile_settings.get("llm_model") or os.environ.get("GEMINI_MODEL") or "").strip()
 
     if not api_key:
-        api_key = (
-            os.environ.get("OPENCODE_API_KEY", "")
-            or os.environ.get("GROQ_API_KEY", "")
-            or os.environ.get("OPENROUTER_API_KEY", "")
-            or os.environ.get("GEMINI_API_KEY", "")
-            or os.environ.get("OPENAI_API_KEY", "")
-        ).strip()
+        env_gemini = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
+        if env_gemini and provider in ("auto", "gemini"):
+            api_key = env_gemini
+            provider = "gemini"
+        else:
+            api_key = (
+                env_gemini
+                or os.environ.get("GROQ_API_KEY", "")
+                or os.environ.get("OPENROUTER_API_KEY", "")
+                or os.environ.get("OPENAI_API_KEY", "")
+                or os.environ.get("OPENCODE_API_KEY", "")
+            ).strip()
 
     if provider == "auto" and api_key:
         if api_key.startswith("gsk_"):
@@ -123,13 +157,13 @@ def _resolve_provider_and_key(profile_settings: Dict[str, Any]) -> Tuple[str, st
         elif api_key.startswith("sk-"):
             provider = "openai"
         else:
-            provider = "opencode"
+            provider = "gemini"
 
     return provider, api_key, model_name
 
 
 def _call_gemini_api(dish_text: str, api_key: str, model: str = "gemini-2.0-flash") -> Optional[Dict[str, Any]]:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    models_to_try = [model] if model == "gemini-2.0-flash" else [model, "gemini-2.0-flash"]
     payload = {
         "contents": [
             {
@@ -140,15 +174,20 @@ def _call_gemini_api(dish_text: str, api_key: str, model: str = "gemini-2.0-flas
         "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"},
     }
     with httpx.Client(timeout=12.0) as client:
-        resp = client.post(url, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        candidates = data.get("candidates", [])
-        if not candidates:
-            return None
-        text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        parsed = _extract_json_object(text_out)
-        return _sanitize_llm_payload(parsed, dish_text)
+        for candidate_model in models_to_try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent?key={api_key}"
+            resp = client.post(url, json=payload)
+            if resp.status_code == 404 and candidate_model != "gemini-2.0-flash":
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            candidates = data.get("candidates", [])
+            if not candidates:
+                return None
+            text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            parsed = _extract_json_object(text_out)
+            return _sanitize_llm_payload(parsed, dish_text)
+    return None
 
 
 def _call_openai_compatible_json(
@@ -224,20 +263,27 @@ def verify_llm_connection(profile_settings: Dict[str, Any]) -> Dict[str, Any]:
                 }
         else:
             target_model = model_name if model_name else "gemini-2.0-flash"
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={api_key}"
+            models_to_try = [target_model] if target_model == "gemini-2.0-flash" else [target_model, "gemini-2.0-flash"]
             payload = {"contents": [{"role": "user", "parts": [{"text": "Ok"}]}]}
             with httpx.Client(timeout=8.0) as client:
-                resp = client.post(url, json=payload)
-                if resp.status_code == 200:
-                    return {
-                        "ok": True,
-                        "mode": "gemini",
-                        "message": f"Clé API Gemini enregistrée et validée avec succès ({target_model}).",
-                    }
+                last_status = 0
+                for candidate_model in models_to_try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent?key={api_key}"
+                    resp = client.post(url, json=payload)
+                    last_status = resp.status_code
+                    if resp.status_code == 200:
+                        return {
+                            "ok": True,
+                            "mode": "gemini",
+                            "resolved_model": candidate_model,
+                            "message": f"Cle API Gemini enregistree et validee avec succes ({candidate_model}).",
+                        }
+                    if resp.status_code == 404 and candidate_model != "gemini-2.0-flash":
+                        continue
                 return {
                     "ok": False,
                     "mode": "gemini",
-                    "message": f"Clé enregistrée, mais Google Gemini a répondu HTTP {resp.status_code}.",
+                    "message": f"Cle enregistree, mais Google Gemini a repondu HTTP {last_status}.",
                 }
     except Exception as exc:
         return {
@@ -652,7 +698,7 @@ def call_llm_chat_agent(
             )
         else:
             target_model = model_name if model_name else "gemini-2.0-flash"
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={api_key}"
+            models_to_try = [target_model] if target_model == "gemini-2.0-flash" else [target_model, "gemini-2.0-flash"]
             payload = {
                 "contents": [
                     {
@@ -663,14 +709,19 @@ def call_llm_chat_agent(
                 "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
             }
             with httpx.Client(timeout=14.0) as client:
-                resp = client.post(url, json=payload)
-                resp.raise_for_status()
-                data = resp.json()
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    return None
-                text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                return _extract_json_object(text_out)
+                for candidate_model in models_to_try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent?key={api_key}"
+                    resp = client.post(url, json=payload)
+                    if resp.status_code == 404 and candidate_model != "gemini-2.0-flash":
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        return None
+                    text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    return _extract_json_object(text_out)
+            return None
     except Exception:
         return None
 
