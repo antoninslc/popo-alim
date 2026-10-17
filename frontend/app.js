@@ -57,20 +57,14 @@ function setSelectedProfile(profileId) {
 }
 
 function applyHeaderProfileBranding(profileId) {
-    const titleEl = document.getElementById("brand-header-title");
-    const dotEl = document.getElementById("brand-profile-dot");
-    const switchBtn = document.getElementById("switch-profile-btn");
+    const greetingEl = document.getElementById("hero-greeting");
     const isAntonin = profileId === "antonin";
-    const headerText = isAntonin ? "L'alimentation d'Antonin" : "L'alimentation de Popo";
+    const firstName = isAntonin ? "Antonin" : "Pauline";
 
-    if (titleEl) titleEl.textContent = headerText;
-    document.title = headerText;
-    if (dotEl) {
-        dotEl.className = `brand-dot ${isAntonin ? "dot-antonin" : "dot-pauline"}`;
+    if (greetingEl) {
+        greetingEl.textContent = `Bonjour ${firstName}`;
     }
-    if (switchBtn) {
-        switchBtn.textContent = isAntonin ? "Profil : Antonin" : "Profil : Pauline";
-    }
+    document.title = isAntonin ? "Suivi d'Antonin" : "L'alimentation de Popo";
 }
 
 async function apiCall(path, options = {}) {
@@ -552,10 +546,13 @@ function initInteractions() {
     });
 
     const launcherOverlay = document.getElementById("profile-launcher-overlay");
-    const switchProfileBtn = document.getElementById("switch-profile-btn");
+    const logoutProfileBtn = document.getElementById("logout-profile-btn");
 
-    if (switchProfileBtn && launcherOverlay) {
-        switchProfileBtn.addEventListener("click", () => {
+    if (logoutProfileBtn && launcherOverlay) {
+        logoutProfileBtn.addEventListener("click", () => {
+            localStorage.removeItem(STORAGE_KEY_PROFILE);
+            const mainTab = document.querySelector(".seg-tab[data-page='main']");
+            if (mainTab) mainTab.click();
             launcherOverlay.classList.remove("hidden");
         });
     }

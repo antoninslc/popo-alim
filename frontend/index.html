@@ -18,15 +18,13 @@
 
             <div class="launcher-profiles-grid">
                 <button type="button" class="launcher-profile-card" data-profile="pauline">
-                    <span class="launcher-avatar avatar-pauline">P</span>
+                    <span class="launcher-avatar">P</span>
                     <span class="launcher-name">Pauline</span>
-                    <span class="launcher-desc">L'alimentation de Popo</span>
                 </button>
 
                 <button type="button" class="launcher-profile-card" data-profile="antonin">
-                    <span class="launcher-avatar avatar-antonin">A</span>
+                    <span class="launcher-avatar">A</span>
                     <span class="launcher-name">Antonin</span>
-                    <span class="launcher-desc">Suivi personnel 7j</span>
                 </button>
             </div>
         </div>
@@ -34,12 +32,6 @@
 
     <header class="apple-nav">
         <div class="container nav-inner">
-            <div class="brand-lockup">
-                <span class="brand-dot" id="brand-profile-dot"></span>
-                <span class="brand-title" id="brand-header-title">L'alimentation de Popo</span>
-                <button type="button" class="user-space-pill" id="switch-profile-btn" title="Changer de profil">Changer de profil</button>
-            </div>
-
             <nav class="segmented-nav" role="tablist">
                 <button type="button" class="seg-tab active" data-page="main">Aujourd'hui &amp; 7j</button>
                 <button type="button" class="seg-tab" data-page="settings">Réglages</button>
@@ -52,6 +44,7 @@
         <section id="page-main" class="page-view active">
             <!-- 1. HAUT : BARRE D'INTERACTION STYLE SPOTLIGHT + REPONSE UNIQUE -->
             <section class="hero-chat-section">
+                <h1 class="hero-greeting" id="hero-greeting">Bonjour Pauline</h1>
                 <form id="chat-form" class="spotlight-bar">
                     <input
                         type="text"
@@ -253,6 +246,7 @@
                         <div class="settings-secondary-actions">
                             <button type="button" class="apple-btn-secondary" id="reset-demo-btn">Données de démo</button>
                             <button type="button" class="apple-btn-danger" id="clear-data-btn">Réinitialiser</button>
+                            <button type="button" class="apple-btn-secondary" id="logout-profile-btn">Se déconnecter</button>
                         </div>
                     </div>
                 </div>
