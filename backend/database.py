@@ -18,8 +18,16 @@ DEFAULT_SQLITE_PATH = os.path.join(ROOT_DIR, "nutrition.db")
 
 
 def _resolve_postgres_url() -> str:
-    for env_key in ("POSTGRES_URL", "DATABASE_URL", "POSTGRES_PRISMA_URL", "NEON_DATABASE_URL"):
-        val = (os.environ.get(env_key) or "").strip()
+    for env_key in (
+        "POSTGRES_URL",
+        "DATABASE_URL",
+        "STORAGE_URL",
+        "STORAGE_POSTGRES_URL",
+        " STORAGE_DATABASE_URL",
+        "POSTGRES_PRISMA_URL",
+        "NEON_DATABASE_URL",
+    ):
+        val = (os.environ.get(env_key.strip()) or "").strip()
         if val:
             if val.startswith("postgres://"):
                 val = "postgresql://" + val[len("postgres://"):]
