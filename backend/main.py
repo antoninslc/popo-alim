@@ -61,7 +61,10 @@ FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 
 @app.on_event("startup")
 def on_startup() -> None:
-    init_db("default")
+    try:
+        init_db("default")
+    except Exception:
+        pass
 
 
 def _resolve_uid(x_user_id: Optional[str], query_user: Optional[str]) -> str:

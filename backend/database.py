@@ -17,21 +17,41 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_SQLITE_PATH = os.path.join(ROOT_DIR, "nutrition.db")
 
 
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+
+def _clean_pg_url(raw_url: str) -> str:
+    url = raw_url.strip().strip('"').strip("'")
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if not url.startswith("postgresql://"):
+        return ""
+    try:
+        parts = urlsplit(url)
+        allowed_params = {"sslmode", "connect_timeout", "application_name"}
+        filtered_query = [(k, v) for k, v in parse_qsl(parts.query) if k in allowed_params]
+        if not any(k == "sslmode" for k, _ in filtered_query):
+            filtered_query.append(("sslmode", "require"))
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(filtered_query), parts.fragment))
+    except Exception:
+        return url
+
+
 def _resolve_postgres_url() -> str:
     for env_key in (
+        "STORAGE_POSTGRES_URL",
+        "STORAGE_DATABASE_URL",
+        "STORAGE_URL",
         "POSTGRES_URL",
         "DATABASE_URL",
-        "STORAGE_URL",
-        "STORAGE_POSTGRES_URL",
-        " STORAGE_DATABASE_URL",
         "POSTGRES_PRISMA_URL",
         "NEON_DATABASE_URL",
     ):
-        val = (os.environ.get(env_key.strip()) or "").strip()
+        val = (os.environ.get(env_key) or "").strip()
         if val:
-            if val.startswith("postgres://"):
-                val = "postgresql://" + val[len("postgres://"):]
-            return val
+            cleaned = _clean_pg_url(val)
+            if cleaned:
+                return cleaned
     return ""
 
 
@@ -60,18 +80,23 @@ def normalize_user_id(raw_user_id: Optional[str]) -> str:
 class DBWrapper:
     def __init__(self) -> None:
         self.pg_url = _resolve_postgres_url()
-        self.is_pg = bool(self.pg_url)
-        if self.is_pg:
-            import psycopg2
-            import psycopg2.extras
+        self.is_pg = False
+        if self.pg_url:
+            try:
+                import psycopg2
+                import psycopg2.extras
 
-            self.conn = psycopg2.connect(self.pg_url)
-            self.cur = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        else:
-            db_path = _resolve_sqlite_path()
-            self.conn = sqlite3.connect(db_path)
-            self.conn.row_factory = sqlite3.Row
-            self.cur = self.conn.cursor()
+                self.conn = psycopg2.connect(self.pg_url, connect_timeout=8)
+                self.cur = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                self.is_pg = True
+                return
+            except Exception:
+                self.is_pg = False
+
+        db_path = _resolve_sqlite_path()
+        self.conn = sqlite3.connect(db_path)
+        self.conn.row_factory = sqlite3.Row
+        self.cur = self.conn.cursor()
 
     def _adapt_sql(self, sql: str) -> str:
         if self.is_pg:
@@ -373,12 +398,13 @@ def ensure_user_initialized(user_id: str = "default", db: Optional[DBWrapper] = 
             """
             UPDATE chat_messages
             SET content = ?, actions_summary = ?
-            WHERE user_id = ? AND content LIKE 'Bienvenue sur votre espace personnel (%'
+            WHERE user_id = ? AND content LIKE ?
             """,
             (
                 f"Bienvenue sur votre espace personnel {display_name}. Ouvrez l'onglet Reglages pour ajuster votre profil, ou commencez directement a noter vos repas et seances ici.",
                 f"Profil {display_name}",
                 uid,
+                "Bienvenue sur votre espace personnel (%",
             ),
         )
         db.execute("SELECT COUNT(*) AS cnt FROM chat_messages WHERE user_id = ?", (uid,))
