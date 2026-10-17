@@ -277,7 +277,9 @@ def sum_nutrients(items: List[Dict[str, float]]) -> Dict[str, float]:
 
 
 def calculate_baseline_targets(profile: Dict[str, Any]) -> Dict[str, float]:
-    """Calcule les besoins quotidiens de base (hors seances de sport ponctuelles)."""
+    """Calcule les besoins quotidiens de base (hors seances de sport ponctuelles).
+    Sources : ANSES 2021, EFSA, ISSN Position Stand (2017), Mifflin-St Jeor (1990).
+    """
     if profile.get("custom_targets_enabled") and profile.get("custom_targets"):
         custom = profile["custom_targets"]
         return {k: float(custom.get(k, 0.0)) for k in NUTRIENT_KEYS}
@@ -288,6 +290,7 @@ def calculate_baseline_targets(profile: Dict[str, Any]) -> Dict[str, float]:
     weight_kg = float(profile.get("weight_kg", 74.0))
     activity_level = profile.get("activity_level", "modere")
     goal = profile.get("goal", "performance")
+    dietary_tags = set(profile.get("dietary_tags", []) or [])
 
     # Formule de Mifflin-St Jeor (MB)
     if sex == "F":
@@ -295,26 +298,26 @@ def calculate_baseline_targets(profile: Dict[str, Any]) -> Dict[str, float]:
     else:
         bmr = 10.0 * weight_kg + 6.25 * height_cm - 5.0 * age + 5.0
 
-    # Multiplicateur d'activite quotidienne hors séances de sport saisies
+    # Multiplicateur d'activite quotidienne hors seances de sport saisies (standards EFSA/ANSES)
     pal_map = {
-        "sedentaire": 1.30,
-        "modere": 1.42,
-        "actif": 1.55,
-        "tres_actif": 1.68,
+        "sedentaire": 1.40,
+        "modere": 1.55,
+        "actif": 1.70,
+        "tres_actif": 1.85,
     }
-    tdee_base = bmr * pal_map.get(activity_level, 1.42)
+    tdee_base = bmr * pal_map.get(activity_level, 1.55)
 
     # Ajustement selon l'objectif
     goal_kcal_factor = {
         "maintien": 1.00,
         "performance": 1.04,
         "prise_masse": 1.12,
-        "seche": 0.86,
+        "seche": 0.85,
     }.get(goal, 1.00)
 
     target_calories = round(tdee_base * goal_kcal_factor / 10.0) * 10.0
 
-    # Repartition physiologique en g/kg
+    # Repartition physiologique en g/kg (ISSN / ANSES)
     prot_per_kg = {
         "maintien": 1.6,
         "performance": 1.8,
@@ -323,24 +326,35 @@ def calculate_baseline_targets(profile: Dict[str, Any]) -> Dict[str, float]:
     }.get(goal, 1.8)
 
     lipids_per_kg = {
-        "maintien": 1.05,
-        "performance": 1.05,
-        "prise_masse": 1.15,
+        "maintien": 1.15,
+        "performance": 1.15,
+        "prise_masse": 1.20,
         "seche": 0.90,
-    }.get(goal, 1.05)
+    }.get(goal, 1.15)
 
     target_proteins = round(weight_kg * prot_per_kg)
-    target_lipids = round(weight_kg * lipids_per_kg)
+    # Plancher hormonal de securite a 0.85 g/kg pour les lipides
+    target_lipids = round(max(weight_kg * 0.85, weight_kg * lipids_per_kg))
+    # Plancher glucidique de securite a 150g (600 kcal)
     remaining_kcal = max(600.0, target_calories - (target_proteins * 4.0 + target_lipids * 9.0))
     target_carbs = round(remaining_kcal / 4.0)
 
-    # Micronutriments de reference (adaptes au profil sportif)
-    target_fiber = 30.0 if sex == "H" else 26.0
-    target_omega3 = round(max(1.8, target_calories / 1150.0), 1)
-    target_iron = 11.0 if sex == "H" else 16.0
-    target_magnesium = round(weight_kg * 5.2)
-    target_calcium = 950.0
-    target_water_ml = round((weight_kg * 32.0) / 50.0) * 50.0
+    # Micronutriments de reference (ANSES 2021 / EFSA / NIH)
+    # Fibres : 30 g/j pour tous les adultes (ANSES)
+    target_fiber = 30.0
+    # Omega-3 : 1% de l'AET en ALA (kcal / 900) + 0.5g d'EPA+DHA (ANSES)
+    target_omega3 = round((target_calories * 0.01 / 9.0) + 0.5, 1)
+    # Fer : 11 mg (H) / 16 mg (F), multiplie par 1.8 si vegetarien/vegan (biodisponibilite fer non-heminique, NIH/ANSES)
+    base_iron = 11.0 if sex == "H" else 16.0
+    if dietary_tags.intersection({"vegetarien", "vegan"}):
+        base_iron = round(base_iron * 1.8, 1)
+    target_iron = base_iron
+    # Magnesium : 5.8 mg/kg/j (fourchette ANSES 5.5 - 6.0 mg/kg)
+    target_magnesium = round(weight_kg * 5.8)
+    # Calcium : 1000 mg/j pour les 18-24 ans, 950 mg/j a partir de 25 ans (ANSES 2021)
+    target_calcium = 1000.0 if age <= 24 else 950.0
+    # Eau : 35 ml/kg/j de base hors sport (EFSA / ANSES)
+    target_water_ml = round((weight_kg * 35.0) / 50.0) * 50.0
 
     return {
         "calories": float(target_calories),
@@ -362,13 +376,15 @@ def calculate_workout_expenditure(
     intensity: str,
     weight_kg: float = 74.0,
 ) -> Dict[str, float]:
-    """Calcule le besoin nutritionnel additionnel engendre par une seance de sport."""
+    """Calcule le besoin nutritionnel additionnel engendre par une seance de sport.
+    Sources : Compendium of Physical Activities (2024), ACSM (2016).
+    """
     hours = max(0.1, float(duration_min) / 60.0)
 
-    # METs approximatifs par categorie et intensite
+    # METs par categorie et intensite (Compendium 2024)
     met_table = {
         "endurance": {"douce": 6.5, "moderee": 9.2, "intense": 11.8},
-        "force": {"douce": 4.0, "moderee": 5.8, "intense": 7.5},
+        "force": {"douce": 4.5, "moderee": 5.8, "intense": 7.5},
         "hiit_sport_co": {"douce": 6.0, "moderee": 8.8, "intense": 11.2},
         "velo_natation": {"douce": 5.8, "moderee": 8.2, "intense": 10.8},
         "mobilite_marche": {"douce": 2.8, "moderee": 3.8, "intense": 4.8},
@@ -376,30 +392,30 @@ def calculate_workout_expenditure(
     cat_mets = met_table.get(category, met_table["endurance"])
     met = cat_mets.get(intensity, 7.0)
 
-    # Dépense nette au-dessus du repos (MET - 1.2)
+    # Depense nette au-dessus du repos (MET - 1.2)
     net_kcal = round((met - 1.2) * weight_kg * hours)
 
-    # Repartition des substrats selon le type d'effort
+    # Repartition des substrats selon le type d'effort et pertes ferriques sudorales/hemolyse ajustees
     if category in ("endurance", "velo_natation"):
         carb_share = 0.72 if intensity != "douce" else 0.58
         prot_share = 0.12
         lip_share = 1.0 - carb_share - prot_share
-        extra_iron = 1.6 * hours if intensity == "intense" else 1.0 * hours
+        extra_iron = 0.8 * hours if intensity == "intense" else 0.5 * hours
     elif category == "force":
-        carb_share = 0.52
-        prot_share = 0.28
+        carb_share = 0.58
+        prot_share = 0.22
         lip_share = 0.20
-        extra_iron = 0.8 * hours
+        extra_iron = 0.4 * hours
     elif category == "hiit_sport_co":
         carb_share = 0.68
         prot_share = 0.18
         lip_share = 0.14
-        extra_iron = 1.4 * hours
+        extra_iron = 0.7 * hours
     else:
         carb_share = 0.50
         prot_share = 0.15
         lip_share = 0.35
-        extra_iron = 0.3 * hours
+        extra_iron = 0.15 * hours
 
     extra_carbs = round((net_kcal * carb_share) / 4.0, 1)
     extra_proteins = round((net_kcal * prot_share) / 4.0, 1)
@@ -407,7 +423,7 @@ def calculate_workout_expenditure(
 
     sweat_rate_ml_h = {"douce": 420.0, "moderee": 650.0, "intense": 900.0}.get(intensity, 600.0)
     extra_water = round((sweat_rate_ml_h * hours) / 25.0) * 25.0
-    extra_magnesium = round(hours * (35.0 if intensity == "intense" else 22.0), 1)
+    extra_magnesium = round(hours * (18.0 if intensity == "intense" else 12.0), 1)
 
     return {
         "calories": float(net_kcal),
@@ -1087,8 +1103,20 @@ def compute_rolling_dashboard(
         anticipation_bonus["calories"] = round(anticipation_bonus["carbs"] * 4.0, 0)
         anticipation_bonus["magnesium"] = round(imminent_exp["magnesium"] * 0.30, 1)
 
-    # Cibles quotidiennes ajustées (Base + Sport moyen 7j + Anticipation J+1)
+    # Cibles quotidiennes ajustees (Base + Sport moyen 7j + Anticipation J+1)
     adjusted_targets = sum_nutrients([baseline_targets, avg_daily_sport_7d, anticipation_bonus])
+
+    # Plafond physiologique des proteines totales a 2.3 g/kg (ISSN Position Stand : 2.2 - 2.4 g/kg max)
+    # Les grammes de proteines excedentaires issus du sport sont convertis en glucides (1g P = 4 kcal = 1g G)
+    if not profile.get("custom_targets_enabled"):
+        max_total_proteins = round(weight_kg * 2.3, 1)
+        if adjusted_targets["proteins"] > max_total_proteins:
+            excess_prot_g = round(adjusted_targets["proteins"] - max_total_proteins, 1)
+            adjusted_targets["proteins"] = max_total_proteins
+            adjusted_targets["carbs"] = round(adjusted_targets["carbs"] + excess_prot_g, 1)
+            # Ajustement coherent du detail sport_bonus pour l'affichage de l'infobulle
+            avg_daily_sport_7d["proteins"] = round(max(0.0, avg_daily_sport_7d["proteins"] - excess_prot_g), 1)
+            avg_daily_sport_7d["carbs"] = round(avg_daily_sport_7d["carbs"] + excess_prot_g, 1)
 
     # Moyenne glissante sur 7 jours ponderee
     divisor = total_effective_days if total_effective_days > 0 else 1.0

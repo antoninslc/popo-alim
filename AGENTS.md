@@ -30,40 +30,47 @@ Pour lancer le serveur local FastAPI (port `8000`) :
 
 ```text
 clever-hopper/
-├── AGENTS.md                  # Ce guide d'architecture et conventions
-├── requirements.txt           # Dependances Python (fastapi, uvicorn, pydantic, httpx)
-├── run_server.py              # Script de lancement Uvicorn (127.0.0.1:8000)
-├── nutrition.db               # Base SQLite locale (creee et peuplee automatiquement)
+├── AGENTS.md                        # Ce guide d'architecture et conventions
+├── CALCUL_APPORTS_REFERENCE.md      # Documentation scientifique detaillee des formules nutritionnelles
+├── requirements.txt                 # Dependances Python (fastapi, uvicorn, pydantic, httpx)
+├── run_server.py                    # Script de lancement Uvicorn (127.0.0.1:8000)
+├── nutrition.db                     # Base SQLite locale (creee et peuplee automatiquement)
 ├── backend/
 │   ├── __init__.py
-│   ├── main.py                # Routes API FastAPI + montage statique du frontend
-│   ├── database.py            # Schema SQLite, CRUD (repas, sport, profil, cache) et seed demo
-│   ├── nutrition_engine.py    # Calculs metaboliques, 7j glissants, peripheriques, recommandations
-│   └── llm_service.py         # Orchestrateur IA multi-fournisseurs + parseur local francais
+│   ├── main.py                      # Routes API FastAPI + montage statique du frontend
+│   ├── database.py                  # Schema SQLite/Postgres, CRUD (repas, sport, profil, cache) et seed demo
+│   ├── nutrition_engine.py          # Calculs metaboliques, 7j glissants, peripheriques, recommandations
+│   └── llm_service.py               # Orchestrateur IA multi-fournisseurs + parseur local francais
 ├── frontend/
-│   ├── index.html             # Structure 2 pages ("Aujourd'hui & 7j" et "Reglages")
-│   ├── styles.css             # Design System style Apple (macOS Sonoma / iOS Health)
-│   └── app.js                 # Logique UI, barre Spotlight IA, barres 7j, tiroirs par jour
+│   ├── index.html                   # Structure 2 pages ("Aujourd'hui & 7j" et "Reglages")
+│   ├── styles.css                   # Design System style Apple (macOS Sonoma / iOS Health)
+│   └── app.js                       # Logique UI, barre Spotlight IA, barres 7j, tiroirs par jour
 └── scratch/
-    └── run_test.py            # Fichier unique dedie aux tests automatises et verifications API
+    └── run_test.py                  # Fichier unique dedie aux tests automatises et verifications API
 ```
 
 ---
 
 ## 4. Fonctionnement metier et moteurs principaux
 
-### 4.1 Moteur nutritionnel et metabolique (`backend/nutrition_engine.py`)
-- **BMR & TDEE** : Formule de Mifflin-St Jeor + facteur d'activite hors-sport (`nef_factor`) + ajustement selon l'objectif (`maintien`, `seche`, `prise_masse`, `recomposition`, `performance`).
+### 4.1 Moteur nutritionnel et metabolique (`backend/nutrition_engine.py` & `CALCUL_APPORTS_REFERENCE.md`)
+- **BMR & TDEE** : Formule de Mifflin-St Jeor + facteur d'activite hors-sport (`pal_map` aligne EFSA/ANSES : `1.40` a `1.85`) + ajustement selon l'objectif (`maintien`, `seche`, `prise_masse`, `performance`). *(Option Katch-McArdle documentee en reserve dans `CALCUL_APPORTS_REFERENCE.md` si un champ de masse grasse est ajoute).*
+- **Macronutriments & Plafond Proteique** :
+  - Proteines de base (`1.6` a `2.1 g/kg`), Lipides de base (`0.90` a `1.20 g/kg` avec plancher hormonal a `0.85 g/kg`), et Glucides calcules par solde calorique (plancher de securite a `150 g` / `600 kcal`).
+  - **Plafond proteique total (`2.3 g/kg`)** : Sur une semaine a forte charge sportive, les proteines totales (`Base + Sport`) sont plafonnees a `2.3 g/kg` (ISSN) et tout excedent proteique sportif est automatiquement converti en glucides (`1g P = 1g G`).
+- **Micronutriments de reference (ANSES 2021 / EFSA / NIH)** :
+  - Fibres : `30 g/j` (H et F).
+  - Omega-3 : `1% AET en ALA + 0.5 g EPA/DHA`.
+  - Fer : `11 mg` (H) / `16 mg` (F), multiplie par **`1.8`** si le profil est `vegetarien` ou `vegan`.
+  - Magnesium : `5.8 mg/kg/j`.
+  - Calcium : `1000 mg/j` (`<= 24 ans`) ou `950 mg/j` (`>= 25 ans`).
 - **Lissage sportif sur 7 jours glissants** :
   - Fenetre d'analyse : `J-6` a `Aujourd'hui` pour les apports consolides.
-  - Les seances realisees (`completed` sur `J-6..J0`) et les seances planifiees (`planned` sur `J0..J+6`) ajustent dynamiquement les cibles quotidiennes en Energie, Glucides, Proteines, Hydratation, Magnesium et Fer (`calculate_workout_expenditure`).
+  - Les seances realisees (`realisee` sur `J-6..J0`) et les seances planifiees (`prevue` sur `J0..J+1`) ajustent dynamiquement les cibles quotidiennes (`calculate_workout_expenditure`).
 - **Logique Anti-Biais (Jours consolides)** :
-  - Un jour est comptabilise dans le denominateur de la moyenne 7j s'il comporte au moins `2 repas` ou `>= 900 kcal`, ou s'il est explicitement cloture (`day_status.is_closed = 1`).
-  - Les jours partiels en cours (ex: seulement le petit-dejeuner saisi aujourd'hui) sont visibles avec un coefficient proratise sans fausser la moyenne hebdomadaire.
-- **Catalogue de peripheriques (`PERIPHERALS_CATALOG`)** :
-  - 15 accompagnements standards pre-calibres (`pain_blanc`, `pain_complet`, `fromage`, `beurre`, `huile_olive`, `fruits_coque`, `fruit_frais`, `yaourt_nature`, `chocolat_noir`, `verre_vin`, `cafe_sucre`, `oeuf_extra`, `avocat_demi`, `legumineuses_side`, `soda_verre`).
-- **10 Indicateurs suivis (`NUTRIENT_META`)** :
-  - `kcal`, `protein_g`, `carbs_g`, `fat_g`, `fiber_g`, `omega3_g`, `iron_mg`, `magnesium_mg`, `calcium_mg`, `water_ml`.
+  - Un jour passe est comptabilise a `1.0` s'il comporte au moins `2 repas`, `>= 1100 kcal` ou un `diner` (ou coche complet). Les jours vides sont exclus du diviseur (`0.0`) et la journee en cours est ponderee selon les creneaux saisis (`compute_day_weight`).
+- **9 Indicateurs affiches (`NUTRIENT_KEYS`)** :
+  - `calories`, `proteins`, `carbs`, `lipids`, `fiber`, `omega3`, `iron`, `magnesium`, `calcium` (`water_ml` est calcule en arriere-plan mais exclu des 9 barres pour eviter les faux positifs de carence lorsque l'eau de boisson n'est pas saisie).
 
 ### 4.2 Moteur IA Hybride et Multi-Fournisseurs (`backend/llm_service.py`)
 - **3 niveaux de resolution** :
