@@ -13,7 +13,6 @@ NUTRIENT_KEYS = [
     "iron",
     "magnesium",
     "calcium",
-    "water_ml",
 ]
 
 NUTRIENT_METADATA: Dict[str, Dict[str, Any]] = {
@@ -87,14 +86,6 @@ NUTRIENT_METADATA: Dict[str, Dict[str, Any]] = {
         "group": "micro",
         "eq_min": 0.90,
         "eq_max": 1.35,
-        "decimals": 0,
-    },
-    "water_ml": {
-        "label": "Hydratation",
-        "unit": "ml",
-        "group": "micro",
-        "eq_min": 0.90,
-        "eq_max": 1.30,
         "decimals": 0,
     },
 }
@@ -938,7 +929,7 @@ CORRECTIVE_PERIPHERALS_CATALOG: List[Dict[str, Any]] = [
     {
         "peripheral_id": "fromage_blanc",
         "title": "1 bol de Skyr ou Fromage blanc (150g)",
-        "targets": ["proteins", "calcium", "water_ml"],
+        "targets": ["proteins", "calcium"],
         "impact": "+13.5g Protéines · +195mg Calcium",
     },
     {
@@ -956,20 +947,14 @@ CORRECTIVE_PERIPHERALS_CATALOG: List[Dict[str, Any]] = [
     {
         "peripheral_id": "crudites_olive",
         "title": "Assiette de crudités + 1 c.a.s huile de colza/noix",
-        "targets": ["omega3", "fiber", "water_ml"],
-        "impact": "+0.65g Oméga-3 · +2.5g Fibres · +140ml Eau",
+        "targets": ["omega3", "fiber"],
+        "impact": "+0.65g Oméga-3 · +2.5g Fibres",
     },
     {
         "peripheral_id": "banane",
         "title": "1 banane + 2 tranches de pain au levain",
         "targets": ["carbs", "calories", "fiber", "magnesium"],
         "impact": "+55g Glucides · +6.9g Fibres · +72mg Magnésium",
-    },
-    {
-        "peripheral_id": "gourde_eau",
-        "title": "1 gourde d'eau minérale (600 ml)",
-        "targets": ["water_ml", "calcium", "magnesium"],
-        "impact": "+600ml Hydratation · +75mg Calcium · +30mg Magnésium",
     },
 ]
 
@@ -1096,11 +1081,10 @@ def compute_rolling_dashboard(
     ]
     anticipation_bonus = empty_nutrients()
     if imminent_workouts:
-        # On ajoute 35% des glucides et de l'hydratation de la seance imminente aux cibles pour preparer l'organisme
+        # On ajoute 35% des glucides et du magnesium de la seance imminente aux cibles pour preparer l'organisme
         imminent_exp = sum_nutrients([w["expenditure"] for w in imminent_workouts])
         anticipation_bonus["carbs"] = round(imminent_exp["carbs"] * 0.35, 1)
         anticipation_bonus["calories"] = round(anticipation_bonus["carbs"] * 4.0, 0)
-        anticipation_bonus["water_ml"] = round(imminent_exp["water_ml"] * 0.30, 0)
         anticipation_bonus["magnesium"] = round(imminent_exp["magnesium"] * 0.30, 1)
 
     # Cibles quotidiennes ajustées (Base + Sport moyen 7j + Anticipation J+1)
@@ -1235,8 +1219,8 @@ def build_recommendations_and_editorial(
         sport_banner = {
             "headline": f"Anticipation : {next_w['title']} ({next_w['duration_min']} min, intensité {next_w['intensity']}) prévue {when_label}",
             "detail": (
-                f"Les cibles de glucides (+{int(next_w['expenditure']['carbs'] * 0.35)}g/j) et d'hydratation "
-                f"(+{int(next_w['expenditure']['water_ml'] * 0.30)}ml/j) sont rehaussées par anticipation. "
+                f"La cible de glucides (+{int(next_w['expenditure']['carbs'] * 0.35)}g/j) "
+                f"est rehaussée par anticipation. "
                 f"Sur les 7 derniers jours, {len(past_workouts)} séance(s) réalisée(s) ({total_past_min} min cumulées) "
                 f"sont intégrées à votre besoin moyen."
             ),

@@ -348,7 +348,7 @@ function renderState(state, options = {}) {
                 row.className = "item-row";
                 const isDone = w.status === "realisee";
                 const exp = w.expenditure || {};
-                row.title = `Dépense : +${Math.round(exp.calories || 0)} kcal · +${Math.round(exp.carbs || 0)}g Glucides · +${Math.round(exp.water_ml || 0)}ml Eau`;
+                row.title = `Dépense : +${Math.round(exp.calories || 0)} kcal · +${Math.round(exp.carbs || 0)}g Glucides · +${Math.round(exp.proteins || 0)}g Protéines`;
 
                 row.innerHTML = `
                     <span class="item-main">${w.title} <span class="item-sub">${w.duration_min} min · ${w.intensity}</span></span>

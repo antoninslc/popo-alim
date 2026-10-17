@@ -19,8 +19,8 @@ SYSTEM_PROMPT_DISH_PARSER = """Tu es un nutritionniste du sport francophone expe
 L'utilisateur saisit l'intitulé d'un plat sans grammage précis.
 Décomposition attendue :
 - Identifie les composantes probables du plat pour une portion adulte standard (1.0x).
-- Estime les 10 indicateurs nutritionnels suivants pour chacune des composantes :
-  calories (kcal), proteins (g), carbs (g), lipids (g), fiber (g), omega3 (g), iron (mg), magnesium (mg), calcium (mg), water_ml (ml).
+- Estime les 9 indicateurs nutritionnels suivants pour chacune des composantes :
+  calories (kcal), proteins (g), carbs (g), lipids (g), fiber (g), omega3 (g), iron (mg), magnesium (mg), calcium (mg).
 Reponds UNIQUEMENT avec un objet JSON valide respectant strictement ce format :
 {
   "components": [
@@ -28,7 +28,7 @@ Reponds UNIQUEMENT avec un objet JSON valide respectant strictement ce format :
       "name": "Nom de la composante et portion estimée en g",
       "nutrients": {
         "calories": 0, "proteins": 0, "carbs": 0, "lipids": 0,
-        "fiber": 0, "omega3": 0, "iron": 0, "magnesium": 0, "calcium": 0, "water_ml": 0
+        "fiber": 0, "omega3": 0, "iron": 0, "magnesium": 0, "calcium": 0
       }
     }
   ]
@@ -749,7 +749,7 @@ def compose_contextual_reply(
     # Point sur les lacunes et l'objectif
     if not deficiencies:
         parts.append(
-            "Sur votre moyenne glissante de 7 jours, tous vos indicateurs (macros, minéraux et hydratation) sont dans la zone d'équilibre."
+            "Sur votre moyenne glissante de 7 jours, tous vos indicateurs (macros, fibres, oméga-3 et minéraux) sont dans la zone d'équilibre."
         )
     else:
         top_defs = [f"{d['label']} ({d['pct']}%)" for d in deficiencies[:3]]
@@ -777,7 +777,7 @@ def compose_contextual_reply(
     if upcoming and any(k in msg_lower for k in ["sport", "seance", "bilan", "semaine", "demain", "prevu", "que manger"]):
         next_w = upcoming[0]
         parts.append(
-            f"Note sport : {next_w['title']} ({next_w['duration_min']} min, {next_w['intensity']}) prévue le {next_w['workout_date']} — vos cibles glucidiques et hydriques en tiennent compte."
+            f"Note sport : {next_w['title']} ({next_w['duration_min']} min, {next_w['intensity']}) prévue le {next_w['workout_date']} — vos cibles glucidiques et minérales en tiennent compte."
         )
 
     return " ".join(parts)
