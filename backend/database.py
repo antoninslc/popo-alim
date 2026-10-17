@@ -352,7 +352,7 @@ def ensure_user_initialized(user_id: str = "default", db: Optional[DBWrapper] = 
             if uid in ("default", "antonin"):
                 seed_demo_data(db, user_id=uid)
             else:
-                display_name = "Pauline" if uid == "pauline" else uid.capitalize()
+                display_name = "Pauline" if uid == "pauline" else ("Antonin" if uid == "antonin" else uid.capitalize())
                 db.execute(
                     """
                     INSERT INTO chat_messages (user_id, role, content, actions_summary, created_at)
@@ -361,13 +361,26 @@ def ensure_user_initialized(user_id: str = "default", db: Optional[DBWrapper] = 
                     (
                         uid,
                         "assistant",
-                        f"Bienvenue {display_name}. Votre journal sur 7 jours glissants est pret. Vous pouvez ajuster vos parametres physiologiques dans l'onglet Reglages ou noter directement vos repas et seances ici.",
+                        f"Bienvenue sur votre espace personnel {display_name}. Ouvrez l'onglet Reglages pour ajuster votre profil, ou commencez directement a noter vos repas et seances ici.",
                         f"Profil {display_name}",
                         datetime.now().isoformat(),
                     ),
                 )
                 db.commit()
     else:
+        display_name = "Pauline" if uid == "pauline" else ("Antonin" if uid == "antonin" else uid.capitalize())
+        db.execute(
+            """
+            UPDATE chat_messages
+            SET content = ?, actions_summary = ?
+            WHERE user_id = ? AND content LIKE 'Bienvenue sur votre espace personnel (%'
+            """,
+            (
+                f"Bienvenue sur votre espace personnel {display_name}. Ouvrez l'onglet Reglages pour ajuster votre profil, ou commencez directement a noter vos repas et seances ici.",
+                f"Profil {display_name}",
+                uid,
+            ),
+        )
         db.execute("SELECT COUNT(*) AS cnt FROM chat_messages WHERE user_id = ?", (uid,))
         msg_cnt = int((db.fetchone() or {}).get("cnt", 0))
         if msg_cnt == 0:
@@ -379,12 +392,12 @@ def ensure_user_initialized(user_id: str = "default", db: Optional[DBWrapper] = 
                 (
                     uid,
                     "assistant",
-                    "Sur vos 7 derniers jours glissants, vos apports en Calcium, Fer et Magnesium sont a l'equilibre, mais vous etes en retrait sur les Glucides, les Omega-3 et les Fibres. Indiquez un repas ou posez une question pour mettre a jour votre suivi.",
-                    "Synthese initiale 7j",
+                    f"Bienvenue sur votre espace personnel {display_name}. Indiquez un repas ou posez une question pour mettre a jour votre suivi.",
+                    f"Profil {display_name}",
                     datetime.now().isoformat(),
                 ),
             )
-            db.commit()
+        db.commit()
 
     if should_close:
         db.close()
