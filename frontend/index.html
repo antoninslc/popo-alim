@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header class="apple-nav">
+        <div class="container nav-inner">
+            <div class="brand-lockup">
+                <span class="brand-dot"></span>
+                <span class="brand-title">Cadence</span>
+                <span class="user-space-pill" id="active-user-badge" title="Espace personnel actif">principal</span>
+            </div>
+
+            <nav class="segmented-nav" role="tablist">
+                <button type="button" class="seg-tab active" data-page="main">Aujourd'hui &amp; 7j</button>
+                <button type="button" class="seg-tab" data-page="settings">Réglages</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container page-container">
+        <!-- PAGE 1 : PRINCIPALE -->
+        <section id="page-main" class="page-view active">
+            <!-- 1. HAUT : BARRE D'INTERACTION STYLE SPOTLIGHT + REPONSE UNIQUE -->
+            <section class="hero-chat-section">
+                <form id="chat-form" class="spotlight-bar">
+                    <input
+                        type="text"
+                        id="chat-input"
+                        class="spotlight-input"
+                        placeholder="Notez un repas, une séance de sport ou posez une question..."
+                        autocomplete="off"
+                        required
+                    >
+                    <button type="submit" id="chat-submit-btn" class="spotlight-send" aria-label="Envoyer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="19" x2="12" y2="5"></line>
+                            <polyline points="5 12 12 5 19 12"></polyline>
+                        </svg>
+                    </button>
+                </form>
+
+                <div class="suggestions-bar">
+                    <button type="button" class="suggestion-chip" data-prompt="Que me conseilles-tu de manger au prochain repas pour combler mes lacunes ?">Idée pour le prochain repas</button>
+                    <button type="button" class="suggestion-chip" data-prompt="Quels petits aliments simples puis-je ajouter pour corriger mes lacunes ?">Petits ajouts correcteurs</button>
+                    <button type="button" class="suggestion-chip" data-prompt="Où j'en suis sur ma semaine et mes séances de sport ?">Bilan de la semaine</button>
+                </div>
+
+                <div class="assistant-card" id="ai-response-box">
+                    <div class="assistant-card-top">
+                        <span class="assistant-badge" id="ai-last-action-tag">Synthèse 7j</span>
+                        <button type="button" class="subtle-link" id="toggle-chat-history-btn">Historique</button>
+                    </div>
+                    <p class="assistant-message" id="ai-last-response-text">Chargement...</p>
+                    <div class="chat-history-drawer hidden" id="chat-history-drawer"></div>
+                </div>
+            </section>
+
+            <!-- 2. MILIEU : LES 10 BARRES D'INDICATEURS (MOYENNE 7J) -->
+            <section class="apple-card indicators-section">
+                <div class="card-header">
+                    <div>
+                        <h2 class="card-title">Équilibre nutritionnel</h2>
+                        <p class="card-subtitle">Moyenne quotidienne glissante sur 7 jours ajustée au sport</p>
+                    </div>
+                    <div class="apple-legend">
+                        <span class="legend-pill"><i class="swatch swatch-low"></i>Retrait</span>
+                        <span class="legend-pill"><i class="swatch swatch-eq"></i>Cible (90–110%)</span>
+                        <span class="legend-pill"><i class="swatch swatch-high"></i>Surplus</span>
+                    </div>
+                </div>
+
+                <div class="indicators-grid">
+                    <div id="gauges-col-left" class="gauges-column"></div>
+                    <div id="gauges-col-right" class="gauges-column"></div>
+                </div>
+            </section>
+
+            <!-- 3. BAS : HISTORIQUES DEROULANTS PAR JOUR (FERMES PAR DEFAUT) -->
+            <section class="drawers-grid">
+                <!-- Colonne Gauche : Plats -->
+                <div class="apple-card collapsible-card" id="meals-drawer-card">
+                    <button type="button" class="drawer-trigger" id="toggle-meals-drawer" aria-expanded="false">
+                        <div class="drawer-trigger-left">
+                            <span class="drawer-title">Historique des repas</span>
+                            <span class="drawer-meta" id="meals-count-label">--</span>
+                        </div>
+                        <span class="chevron-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </span>
+                    </button>
+                    <div class="drawer-body hidden" id="meals-drawer-body">
+                        <div id="meals-history-list" class="day-groups-container"></div>
+                    </div>
+                </div>
+
+                <!-- Colonne Droite : Sport -->
+                <div class="apple-card collapsible-card" id="workouts-drawer-card">
+                    <button type="button" class="drawer-trigger" id="toggle-workouts-drawer" aria-expanded="false">
+                        <div class="drawer-trigger-left">
+                            <span class="drawer-title">Activités sportives</span>
+                            <span class="drawer-meta" id="workouts-count-label">--</span>
+                        </div>
+                        <span class="chevron-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </span>
+                    </button>
+                    <div class="drawer-body hidden" id="workouts-drawer-body">
+                        <div id="workouts-history-list" class="day-groups-container"></div>
+                    </div>
+                </div>
+            </section>
+        </section>
+
+        <!-- PAGE 2 : REGLAGES -->
+        <section id="page-settings" class="page-view">
+            <form id="settings-form" class="settings-grid">
+                <div class="apple-card settings-panel">
+                    <h2 class="card-title">Profil physiologique</h2>
+                    <p class="card-subtitle">Base de calcul de vos besoins quotidiens hors sport</p>
+
+                    <div class="form-grid-2">
+                        <div class="apple-field">
+                            <label for="prof-sex">Sexe</label>
+                            <select id="prof-sex">
+                                <option value="H">Homme</option>
+                                <option value="F">Femme</option>
+                            </select>
+                        </div>
+                        <div class="apple-field">
+                            <label for="prof-age">Âge</label>
+                            <input type="number" id="prof-age" min="15" max="99" required>
+                        </div>
+                        <div class="apple-field">
+                            <label for="prof-height">Taille (cm)</label>
+                            <input type="number" id="prof-height" min="120" max="230" step="0.5" required>
+                        </div>
+                        <div class="apple-field">
+                            <label for="prof-weight">Poids (kg)</label>
+                            <input type="number" id="prof-weight" min="35" max="200" step="0.1" required>
+                        </div>
+                    </div>
+
+                    <div class="apple-field">
+                        <label for="prof-activity">Activité quotidienne (hors sport)</label>
+                        <select id="prof-activity">
+                            <option value="sedentaire">Sédentaire / Bureau</option>
+                            <option value="modere">Actif au quotidien</option>
+                            <option value="actif">Très dynamique</option>
+                            <option value="tres_actif">Métier physique</option>
+                        </select>
+                    </div>
+
+                    <div class="apple-field">
+                        <label for="prof-goal">Objectif</label>
+                        <select id="prof-goal">
+                            <option value="maintien">Maintien &amp; Équilibre</option>
+                            <option value="performance">Performance &amp; Énergie</option>
+                            <option value="prise_masse">Prise de muscle</option>
+                            <option value="seche">Affûtage / Sèche</option>
+                        </select>
+                    </div>
+
+                    <div id="physio-save-feedback" class="settings-feedback hidden"></div>
+
+                    <div class="settings-footer">
+                        <button type="button" class="apple-btn-primary" id="save-physio-btn">Enregistrer le profil</button>
+                    </div>
+                </div>
+
+                <div class="apple-card settings-panel">
+                    <h2 class="card-title">Préférences &amp; Moteur IA</h2>
+                    <p class="card-subtitle">Personnalisation des recommandations et connexion API</p>
+
+                    <div class="apple-field">
+                        <label>Exclusions alimentaires</label>
+                        <div class="pills-select-group" id="prof-diet-tags">
+                            <label class="pill-checkbox"><input type="checkbox" value="vegetarien"><span>Végétarien</span></label>
+                            <label class="pill-checkbox"><input type="checkbox" value="vegan"><span>Vegan</span></label>
+                            <label class="pill-checkbox"><input type="checkbox" value="sans_porc"><span>Sans porc</span></label>
+                            <label class="pill-checkbox"><input type="checkbox" value="sans_poisson"><span>Sans poisson</span></label>
+                            <label class="pill-checkbox"><input type="checkbox" value="sans_boeuf"><span>Sans bœuf</span></label>
+                            <label class="pill-checkbox"><input type="checkbox" value="sans_lactose"><span>Sans lactose</span></label>
+                        </div>
+                    </div>
+
+                    <div class="apple-field">
+                        <label for="prof-excluded">Aliments refusés (séparés par virgule)</label>
+                        <input type="text" id="prof-excluded" placeholder="Ex: choux, abats, crevettes...">
+                    </div>
+
+                    <div class="form-grid-2">
+                        <div class="apple-field">
+                            <label for="prof-llm-provider">Moteur IA</label>
+                            <select id="prof-llm-provider">
+                                <option value="auto">Hybride Auto (détecte la clé)</option>
+                                <option value="opencode">OpenCode (glm-5.3-flash-free)</option>
+                                <option value="gemini">Google Gemini Studio (Gratuit)</option>
+                                <option value="groq">Groq Cloud (Gratuit - Llama 3.3)</option>
+                                <option value="openrouter">OpenRouter (Modèles :free)</option>
+                                <option value="openai">OpenAI (GPT-4o-mini)</option>
+                                <option value="local_hybrid">100% Local sans clé API</option>
+                            </select>
+                        </div>
+                        <div class="apple-field">
+                            <label for="prof-llm-model">Modèle</label>
+                            <input type="text" id="prof-llm-model" placeholder="glm-5.3-flash-free / gemini-2.0-flash">
+                        </div>
+                    </div>
+
+                    <div class="apple-field">
+                        <label for="prof-api-key">Clé API (stockée localement)</label>
+                        <input type="password" id="prof-api-key" placeholder="Clé OpenCode Zen, AIza... (Gemini), gsk_... (Groq) ou sk-or-...">
+                    </div>
+
+                    <div id="settings-save-feedback" class="settings-feedback hidden"></div>
+
+                    <div class="settings-footer">
+                        <button type="submit" class="apple-btn-primary" id="save-settings-btn">Enregistrer</button>
+                        <div class="settings-secondary-actions">
+                            <button type="button" class="apple-btn-secondary" id="reset-demo-btn">Données de démo</button>
+                            <button type="button" class="apple-btn-danger" id="clear-data-btn">Réinitialiser</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            <div class="apple-card settings-panel">
+                <h2 class="card-title">Partage &amp; Espaces personnels</h2>
+                <p class="card-subtitle">Chaque prénom ou identifiant dispose de son propre journal, profil et clé API totalement séparés.</p>
+
+                <div class="form-grid-2">
+                    <div class="apple-field">
+                        <label for="user-space-input">Identifiant de l'espace (ex: antonin, popo, marie)</label>
+                        <input type="text" id="user-space-input" placeholder="default">
+                    </div>
+                    <div class="apple-field">
+                        <label for="share-link-preview">Lien direct vers cet espace</label>
+                        <input type="text" id="share-link-preview" readonly>
+                    </div>
+                </div>
+
+                <div id="space-share-feedback" class="settings-feedback hidden"></div>
+
+                <div class="settings-footer">
+                    <div class="settings-secondary-actions">
+                        <button type="button" class="apple-btn-primary" id="switch-space-btn">Ouvrir cet espace</button>
+                        <button type="button" class="apple-btn-secondary" id="copy-share-link-btn">Copier le lien à partager</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
