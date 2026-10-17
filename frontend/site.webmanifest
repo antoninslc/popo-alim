@@ -1,6 +1,6 @@
 {
-  "name": "L'alimentation de Popo",
-  "short_name": "Cadence",
+  "name": "Nutrition",
+  "short_name": "Nutrition",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F5F5F7",

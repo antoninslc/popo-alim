@@ -635,6 +635,104 @@ body {
     border-bottom: none;
 }
 
+.meal-item-wrap {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+}
+
+.meal-item-wrap:last-child {
+    border-bottom: none;
+}
+
+.meal-item-wrap .item-row {
+    border-bottom: none;
+}
+
+.meal-clickable-row {
+    cursor: pointer;
+    user-select: none;
+    border-radius: 8px;
+    transition: opacity 0.15s ease;
+}
+
+.meal-clickable-row:hover .item-main {
+    color: var(--apple-blue);
+}
+
+.meal-expand-chevron {
+    color: var(--ink-tertiary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.22s cubic-bezier(0.25, 1, 0.5, 1), color 0.15s ease;
+}
+
+.meal-clickable-row:hover .meal-expand-chevron {
+    color: var(--ink-primary);
+}
+
+.meal-item-wrap.is-expanded .meal-expand-chevron {
+    transform: rotate(180deg);
+    color: var(--apple-blue);
+}
+
+.meal-details-panel {
+    padding: 2px 0 11px;
+    animation: mealDetailsSlideDown 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.meal-details-panel.hidden {
+    display: none;
+}
+
+@keyframes mealDetailsSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.meal-nutrients-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.meal-nutrient-pill {
+    background: var(--bg-card);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    border-radius: 9px;
+    padding: 6px 9px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.mnp-label {
+    font-size: 0.72rem;
+    color: var(--ink-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mnp-value {
+    font-size: 0.75rem;
+    color: var(--ink-secondary);
+    white-space: nowrap;
+}
+
+.mnp-value strong {
+    color: var(--ink-primary);
+    font-weight: 600;
+}
+
 .item-slot {
     font-size: 0.74rem;
     font-weight: 500;
@@ -649,6 +747,7 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    transition: color 0.15s ease;
 }
 
 .item-sub {
@@ -1176,6 +1275,10 @@ body {
         opacity: 0.75;
         padding: 4px 6px;
         font-size: 1.05rem;
+    }
+
+    .meal-nutrients-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 
     /* Page Reglages Mobile */

@@ -132,7 +132,7 @@ function applyHeaderProfileBranding(profileId) {
     if (settingsBadgeEl) {
         settingsBadgeEl.textContent = `Profil : ${firstName}`;
     }
-    document.title = isDev ? "Cadence [Dev Local]" : isAntonin ? "Suivi d'Antonin" : "L'alimentation de Popo";
+    document.title = isDev ? "Nutrition [Dev Local]" : "Nutrition";
 }
 
 async function apiCall(path, options = {}) {
@@ -376,6 +376,11 @@ function renderState(state, options = {}) {
     }
 
     // 3. Bas Gauche : Historique des Repas deroulant (reconstruit uniquement si les repas ont change)
+    if (!window._expandedMealIds) {
+        window._expandedMealIds = new Set();
+    }
+    const expandedMealIds = window._expandedMealIds;
+
     const meals = state.meals || [];
     const mealsSig = JSON.stringify(meals);
     if (options.force || sectionSignatures.meals !== mealsSig) {
@@ -414,34 +419,103 @@ function renderState(state, options = {}) {
 
                 const boxEl = groupEl.querySelector(".day-group-box");
                 dayMeals.forEach((m) => {
-                    const row = document.createElement("div");
-                    row.className = "item-row";
                     const n = m.nutrients || {};
                     const periphNames = (m.peripherals || []).map((pid) => catalogMap[pid] || pid);
                     const periphSub = periphNames.length ? `<span class="item-sub">+ ${periphNames.join(", ")}</span>` : "";
                     const portionSub = m.portion_size && m.portion_size !== "normal" ? `<span class="item-sub">[${m.portion_size}]</span>` : "";
+                    const isExpanded = expandedMealIds.has(m.id);
 
-                    row.title = `${Math.round(n.calories || 0)} kcal · ${Math.round(n.proteins || 0)}g P · ${Math.round(n.carbs || 0)}g G · ${Math.round(n.lipids || 0)}g L · ${n.fiber || 0}g Fibres · ${n.omega3 || 0}g Oméga-3`;
+                    const fmtVal = (val, dec = 0) => {
+                        const num = Number(val || 0);
+                        return dec === 0 ? String(Math.round(num)) : num.toFixed(dec).replace(/\.0+$/, "");
+                    };
 
-                    row.innerHTML = `
-                        <span class="item-slot">${SLOT_SHORT[m.meal_type] || m.meal_type}</span>
-                        <span class="item-main">${m.dish_text}${periphSub}${portionSub}</span>
-                        <div class="item-right">
-                            <span class="item-kcal">${Math.round(n.calories || 0)} kcal</span>
-                            <button type="button" class="item-del" title="Supprimer">×</button>
+                    const mealSpecs = [
+                        { label: "Énergie", val: fmtVal(n.calories, 0), unit: "kcal" },
+                        { label: "Protéines", val: fmtVal(n.proteins, 0), unit: "g" },
+                        { label: "Glucides", val: fmtVal(n.carbs, 0), unit: "g" },
+                        { label: "Lipides", val: fmtVal(n.lipids, 0), unit: "g" },
+                        { label: "Fibres", val: fmtVal(n.fiber, 1), unit: "g" },
+                        { label: "Oméga-3", val: fmtVal(n.omega3, 2), unit: "g" },
+                        { label: "Fer", val: fmtVal(n.iron, 1), unit: "mg" },
+                        { label: "Magnésium", val: fmtVal(n.magnesium, 0), unit: "mg" },
+                        { label: "Calcium", val: fmtVal(n.calcium, 0), unit: "mg" },
+                    ];
+
+                    const detailsPillsHtml = mealSpecs
+                        .map(
+                            (sp) => `
+                            <div class="meal-nutrient-pill">
+                                <span class="mnp-label">${sp.label}</span>
+                                <span class="mnp-value"><strong>${sp.val}</strong> ${sp.unit}</span>
+                            </div>`
+                        )
+                        .join("");
+
+                    const itemWrap = document.createElement("div");
+                    itemWrap.className = `meal-item-wrap${isExpanded ? " is-expanded" : ""}`;
+
+                    itemWrap.innerHTML = `
+                        <div class="item-row meal-clickable-row" role="button" tabindex="0" aria-expanded="${isExpanded}">
+                            <span class="item-slot">${SLOT_SHORT[m.meal_type] || m.meal_type}</span>
+                            <span class="item-main">${m.dish_text}${periphSub}${portionSub}</span>
+                            <div class="item-right">
+                                <span class="item-kcal">${Math.round(n.calories || 0)} kcal</span>
+                                <span class="meal-expand-chevron" aria-hidden="true">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </span>
+                                <button type="button" class="item-del" title="Supprimer">×</button>
+                            </div>
+                        </div>
+                        <div class="meal-details-panel${isExpanded ? "" : " hidden"}">
+                            <div class="meal-nutrients-grid">
+                                ${detailsPillsHtml}
+                            </div>
                         </div>
                     `;
 
-                    row.querySelector(".item-del").addEventListener("click", async () => {
+                    const rowEl = itemWrap.querySelector(".meal-clickable-row");
+                    const detailsEl = itemWrap.querySelector(".meal-details-panel");
+                    const delBtn = itemWrap.querySelector(".item-del");
+
+                    const toggleDetails = () => {
+                        const nowExpanded = itemWrap.classList.toggle("is-expanded");
+                        detailsEl.classList.toggle("hidden", !nowExpanded);
+                        rowEl.setAttribute("aria-expanded", String(nowExpanded));
+                        if (nowExpanded) {
+                            expandedMealIds.add(m.id);
+                        } else {
+                            expandedMealIds.delete(m.id);
+                        }
+                    };
+
+                    rowEl.addEventListener("click", (e) => {
+                        if (e.target.closest(".item-del")) return;
+                        toggleDetails();
+                    });
+
+                    rowEl.addEventListener("keydown", (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                            if (e.target.closest(".item-del")) return;
+                            e.preventDefault();
+                            toggleDetails();
+                        }
+                    });
+
+                    delBtn.addEventListener("click", async (e) => {
+                        e.stopPropagation();
                         isMutating = true;
                         try {
+                            expandedMealIds.delete(m.id);
                             const updated = await apiCall(`/api/meals/${m.id}`, { method: "DELETE" });
                             renderState(updated);
                         } finally {
                             isMutating = false;
                         }
                     });
-                    boxEl.appendChild(row);
+                    boxEl.appendChild(itemWrap);
                 });
 
                 mealsList.appendChild(groupEl);
