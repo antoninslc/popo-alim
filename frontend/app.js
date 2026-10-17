@@ -37,41 +37,40 @@ function formatDayHeader(isoDate) {
     return formatted;
 }
 
-function normalizeUserSlug(raw) {
-    if (!raw) return "default";
-    const cleaned = String(raw).trim().toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32);
-    return cleaned || "default";
+const VALID_PROFILES = ["pauline", "antonin"];
+const STORAGE_KEY_PROFILE = "cadence_selected_profile";
+
+function getSelectedProfile() {
+    const stored = (localStorage.getItem(STORAGE_KEY_PROFILE) || "").trim().toLowerCase();
+    return VALID_PROFILES.includes(stored) ? stored : null;
 }
 
 function getCurrentUserId() {
-    const params = new URLSearchParams(window.location.search);
-    const fromUrl = params.get("user");
-    if (fromUrl) {
-        const slug = normalizeUserSlug(fromUrl);
-        localStorage.setItem("cadence_user_id", slug);
-        return slug;
-    }
-    const stored = localStorage.getItem("cadence_user_id");
-    return stored ? normalizeUserSlug(stored) : "default";
+    return getSelectedProfile() || "pauline";
 }
 
-function setCurrentUserId(newId) {
-    const slug = normalizeUserSlug(newId);
-    localStorage.setItem("cadence_user_id", slug);
-    const url = new URL(window.location.href);
-    if (slug === "default") {
-        url.searchParams.delete("user");
-    } else {
-        url.searchParams.set("user", slug);
-    }
-    window.history.replaceState({}, "", url.toString());
-    return slug;
+function setSelectedProfile(profileId) {
+    const clean = VALID_PROFILES.includes(profileId) ? profileId : "pauline";
+    localStorage.setItem(STORAGE_KEY_PROFILE, clean);
+    applyHeaderProfileBranding(clean);
+    return clean;
 }
 
-function buildShareUrl(userId) {
-    const slug = normalizeUserSlug(userId);
-    const base = window.location.origin + window.location.pathname;
-    return slug === "default" ? base : `${base}?user=${encodeURIComponent(slug)}`;
+function applyHeaderProfileBranding(profileId) {
+    const titleEl = document.getElementById("brand-header-title");
+    const dotEl = document.getElementById("brand-profile-dot");
+    const switchBtn = document.getElementById("switch-profile-btn");
+    const isAntonin = profileId === "antonin";
+    const headerText = isAntonin ? "L'alimentation d'Antonin" : "L'alimentation de Popo";
+
+    if (titleEl) titleEl.textContent = headerText;
+    document.title = headerText;
+    if (dotEl) {
+        dotEl.className = `brand-dot ${isAntonin ? "dot-antonin" : "dot-pauline"}`;
+    }
+    if (switchBtn) {
+        switchBtn.textContent = isAntonin ? "Profil : Antonin" : "Profil : Pauline";
+    }
 }
 
 async function apiCall(path, options = {}) {
@@ -133,7 +132,46 @@ function initPageNavigationAndDrawers() {
     });
 }
 
-function renderState(state) {
+let assistantTypingTimer = null;
+let lastRenderedResponseText = null;
+
+function stopAssistantTyping() {
+    if (assistantTypingTimer) {
+        clearInterval(assistantTypingTimer);
+        assistantTypingTimer = null;
+    }
+}
+
+function animateAssistantResponse(el, fullText, forceAnimate = false) {
+    const target = String(fullText || "");
+    if (!forceAnimate && target === lastRenderedResponseText) {
+        el.textContent = target;
+        el.classList.remove("is-streaming", "is-loading");
+        return;
+    }
+
+    lastRenderedResponseText = target;
+    stopAssistantTyping();
+
+    el.classList.remove("is-loading");
+    el.classList.add("is-streaming");
+    el.textContent = "";
+
+    const chars = Array.from(target);
+    let idx = 0;
+    const step = chars.length > 260 ? 3 : chars.length > 120 ? 2 : 1;
+
+    assistantTypingTimer = setInterval(() => {
+        idx = Math.min(chars.length, idx + step);
+        el.textContent = chars.slice(0, idx).join("");
+        if (idx >= chars.length) {
+            stopAssistantTyping();
+            el.classList.remove("is-streaming");
+        }
+    }, 16);
+}
+
+function renderState(state, options = {}) {
     const dash = state.dashboard || {};
     const catalogMap = {};
     (state.peripherals_catalog || []).forEach((p) => {
@@ -146,13 +184,15 @@ function renderState(state) {
     const actionTagEl = document.getElementById("ai-last-action-tag");
     const responseTextEl = document.getElementById("ai-last-response-text");
 
+    let targetResponseText = "Prêt.";
     if (lastAssistant) {
         actionTagEl.textContent = lastAssistant.actions_summary || "Point 7j";
-        responseTextEl.textContent = lastAssistant.content;
+        targetResponseText = lastAssistant.content;
     } else {
         actionTagEl.textContent = "Synthèse 7j";
-        responseTextEl.textContent = dash.editorial?.body || "Prêt.";
+        targetResponseText = dash.editorial?.body || "Prêt.";
     }
+    animateAssistantResponse(responseTextEl, targetResponseText, Boolean(options.animateResponse));
 
     const chatDrawer = document.getElementById("chat-history-drawer");
     chatDrawer.innerHTML = "";
@@ -334,21 +374,10 @@ function renderState(state) {
         });
     }
 
-    // 5. Page Reglages & Espace actif
+    // 5. Page Reglages & Profil actif
     const prof = state.profile || {};
     const activeUid = state.user_id || getCurrentUserId();
-    const badgeEl = document.getElementById("active-user-badge");
-    if (badgeEl) {
-        badgeEl.textContent = activeUid === "default" ? "principal" : activeUid;
-    }
-    const spaceInputEl = document.getElementById("user-space-input");
-    const sharePreviewEl = document.getElementById("share-link-preview");
-    if (spaceInputEl && document.activeElement !== spaceInputEl) {
-        spaceInputEl.value = activeUid;
-    }
-    if (sharePreviewEl) {
-        sharePreviewEl.value = buildShareUrl(spaceInputEl ? spaceInputEl.value : activeUid);
-    }
+    applyHeaderProfileBranding(activeUid);
 
     document.getElementById("prof-sex").value = prof.sex || "H";
     document.getElementById("prof-age").value = prof.age || 29;
@@ -379,15 +408,20 @@ async function sendChatMessage(messageText) {
     const responseTextEl = document.getElementById("ai-last-response-text");
 
     submitBtn.disabled = true;
-    responseTextEl.textContent = "Mise à jour en cours...";
+    stopAssistantTyping();
+    responseTextEl.classList.remove("is-streaming");
+    responseTextEl.classList.add("is-loading");
+    responseTextEl.textContent = "Analyse en cours...";
     try {
         const updated = await apiCall("/api/chat", {
             method: "POST",
             body: JSON.stringify({ message: messageText }),
         });
         input.value = "";
-        renderState(updated);
+        renderState(updated, { animateResponse: true });
     } catch (err) {
+        stopAssistantTyping();
+        responseTextEl.classList.remove("is-streaming", "is-loading");
         responseTextEl.textContent = "Erreur : " + err.message;
     } finally {
         submitBtn.disabled = false;
@@ -517,68 +551,38 @@ function initInteractions() {
         renderState(updated);
     });
 
-    const badgeEl = document.getElementById("active-user-badge");
-    const spaceInputEl = document.getElementById("user-space-input");
-    const sharePreviewEl = document.getElementById("share-link-preview");
-    const switchSpaceBtn = document.getElementById("switch-space-btn");
-    const copyLinkBtn = document.getElementById("copy-share-link-btn");
-    const spaceFeedbackEl = document.getElementById("space-share-feedback");
+    const launcherOverlay = document.getElementById("profile-launcher-overlay");
+    const switchProfileBtn = document.getElementById("switch-profile-btn");
 
-    if (badgeEl) {
-        badgeEl.addEventListener("click", () => {
-            const settingsTab = document.querySelector(".seg-tab[data-page='settings']");
-            if (settingsTab) settingsTab.click();
-            if (spaceInputEl) spaceInputEl.focus();
+    if (switchProfileBtn && launcherOverlay) {
+        switchProfileBtn.addEventListener("click", () => {
+            launcherOverlay.classList.remove("hidden");
         });
     }
 
-    if (spaceInputEl && sharePreviewEl) {
-        spaceInputEl.addEventListener("input", () => {
-            sharePreviewEl.value = buildShareUrl(spaceInputEl.value);
+    document.querySelectorAll(".launcher-profile-card").forEach((card) => {
+        card.addEventListener("click", async () => {
+            const chosen = card.dataset.profile;
+            setSelectedProfile(chosen);
+            if (launcherOverlay) launcherOverlay.classList.add("hidden");
+            const state = await apiCall("/api/state");
+            renderState(state);
         });
-    }
-
-    if (switchSpaceBtn && spaceInputEl) {
-        switchSpaceBtn.addEventListener("click", async () => {
-            const nextUid = setCurrentUserId(spaceInputEl.value);
-            spaceInputEl.value = nextUid;
-            if (sharePreviewEl) sharePreviewEl.value = buildShareUrl(nextUid);
-            const updated = await apiCall("/api/state");
-            renderState(updated);
-            if (spaceFeedbackEl) {
-                spaceFeedbackEl.className = "settings-feedback is-success";
-                spaceFeedbackEl.textContent = `Espace actif bascule sur "${nextUid}".`;
-            }
-        });
-    }
-
-    if (copyLinkBtn && spaceInputEl) {
-        copyLinkBtn.addEventListener("click", async () => {
-            const targetSlug = normalizeUserSlug(spaceInputEl.value);
-            const urlToShare = buildShareUrl(targetSlug);
-            if (sharePreviewEl) sharePreviewEl.value = urlToShare;
-            try {
-                await navigator.clipboard.writeText(urlToShare);
-                if (spaceFeedbackEl) {
-                    spaceFeedbackEl.className = "settings-feedback is-success";
-                    spaceFeedbackEl.textContent = `Lien copie pour l'espace "${targetSlug}" : envoyez-lui simplement cette URL.`;
-                }
-            } catch (_) {
-                if (sharePreviewEl) {
-                    sharePreviewEl.select();
-                }
-                if (spaceFeedbackEl) {
-                    spaceFeedbackEl.className = "settings-feedback";
-                    spaceFeedbackEl.textContent = `Lien pret a copier : ${urlToShare}`;
-                }
-            }
-        });
-    }
+    });
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
     initPageNavigationAndDrawers();
     initInteractions();
-    const initial = await apiCall("/api/state");
-    renderState(initial);
+
+    const launcherOverlay = document.getElementById("profile-launcher-overlay");
+    const savedProfile = getSelectedProfile();
+
+    if (!savedProfile) {
+        if (launcherOverlay) launcherOverlay.classList.remove("hidden");
+    } else {
+        applyHeaderProfileBranding(savedProfile);
+        const initial = await apiCall("/api/state");
+        renderState(initial);
+    }
 });

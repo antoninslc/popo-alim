@@ -314,24 +314,45 @@ def ensure_user_initialized(user_id: str = "default", db: Optional[DBWrapper] = 
     exists = bool(row and int(row["cnt"]) > 0)
 
     if not exists:
+        if uid == "antonin":
+            db.execute("SELECT COUNT(*) AS cnt FROM user_profiles WHERE user_id = 'default'")
+            has_default = int((db.fetchone() or {}).get("cnt", 0)) > 0
+            if has_default:
+                db.execute("UPDATE user_profiles SET user_id = 'antonin' WHERE user_id = 'default'")
+                db.execute("UPDATE meals SET user_id = 'antonin' WHERE user_id = 'default'")
+                db.execute("UPDATE workouts SET user_id = 'antonin' WHERE user_id = 'default'")
+                db.execute("UPDATE day_status SET user_id = 'antonin' WHERE user_id = 'default'")
+                db.execute("UPDATE chat_messages SET user_id = 'antonin' WHERE user_id = 'default'")
+                db.commit()
+                if should_close:
+                    db.close()
+                return
+
+        default_sex = "F" if uid == "pauline" else "H"
+        default_age = 27 if uid == "pauline" else 29
+        default_height = 166.0 if uid == "pauline" else 179.0
+        default_weight = 58.0 if uid == "pauline" else 74.0
+        default_goal = "maintien" if uid == "pauline" else "performance"
+
         db.execute(
             """
             INSERT INTO user_profiles (
                 user_id, sex, age, height_cm, weight_kg, activity_level, goal,
                 dietary_tags_json, excluded_foods, custom_targets_enabled,
                 custom_targets_json, llm_provider, api_key, llm_model
-            ) VALUES (?, 'H', 29, 179.0, 74.0, 'modere', 'performance', '[]', '', 0, '{}', 'auto', '', 'gemini-2.0-flash')
+            ) VALUES (?, ?, ?, ?, ?, 'modere', ?, '[]', '', 0, '{}', 'auto', '', 'gemini-2.0-flash')
             """,
-            (uid,),
+            (uid, default_sex, default_age, default_height, default_weight, default_goal),
         )
         db.commit()
 
         db.execute("SELECT COUNT(*) AS cnt FROM meals WHERE user_id = ?", (uid,))
         meals_cnt = int((db.fetchone() or {}).get("cnt", 0))
         if meals_cnt == 0:
-            if uid == "default":
+            if uid in ("default", "antonin"):
                 seed_demo_data(db, user_id=uid)
             else:
+                display_name = "Pauline" if uid == "pauline" else uid.capitalize()
                 db.execute(
                     """
                     INSERT INTO chat_messages (user_id, role, content, actions_summary, created_at)
@@ -340,8 +361,8 @@ def ensure_user_initialized(user_id: str = "default", db: Optional[DBWrapper] = 
                     (
                         uid,
                         "assistant",
-                        f"Bienvenue sur votre espace personnel ({uid}). Ouvrez l'onglet Reglages pour renseigner votre profil et votre cle API gratuite, ou commencez directement a noter vos repas et seances ici.",
-                        "Nouvel espace",
+                        f"Bienvenue {display_name}. Votre journal sur 7 jours glissants est pret. Vous pouvez ajuster vos parametres physiologiques dans l'onglet Reglages ou noter directement vos repas et seances ici.",
+                        f"Profil {display_name}",
                         datetime.now().isoformat(),
                     ),
                 )
