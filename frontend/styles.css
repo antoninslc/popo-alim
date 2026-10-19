@@ -737,7 +737,7 @@ body {
     font-size: 0.74rem;
     font-weight: 500;
     color: var(--ink-tertiary);
-    min-width: 56px;
+    min-width: 66px;
 }
 
 .item-main {

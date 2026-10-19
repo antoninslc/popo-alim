@@ -11,14 +11,17 @@ from backend.nutrition_engine import (
     empty_nutrients,
     evaluate_dish_locally,
     normalize_dish_key,
+    strip_accents,
     sum_nutrients,
 )
 
 
-SYSTEM_PROMPT_DISH_PARSER = """Tu es un nutritionniste du sport francophone expert en estimation de portions standards.
-L'utilisateur saisit l'intitulé d'un plat sans grammage précis.
-Décomposition attendue :
-- Identifie les composantes probables du plat pour une portion adulte standard (1.0x).
+SYSTEM_PROMPT_DISH_PARSER = """Tu es un nutritionniste du sport francophone expert en table Ciqual (ANSES) et en estimation réaliste des portions.
+L'utilisateur saisit l'intitulé d'un plat ou d'une collation.
+Règles strictes :
+- Respecte scrupuleusement les quantités indiquées (ex: "2 gaufres" = ~90g au total soit ~6g de protéines et ~350 kcal, "1 petit pot de skyr" = 100-140g soit ~10-13g de protéines).
+- Ne surestime JAMAIS les protéines des produits céréaliers, pâtisseries, gaufres, crêpes, biscuits ou fruits (une gaufre = ~3g de protéines, un skyr 125g = ~12g de protéines, un œuf = ~6.5g, 100g de viande/poisson cuit = ~24-28g).
+- Vérifie la cohérence énergétique : calories ≈ (proteins * 4) + (carbs * 4) + (lipids * 9) + (fiber * 2).
 - Estime les 9 indicateurs nutritionnels suivants pour chacune des composantes :
   calories (kcal), proteins (g), carbs (g), lipids (g), fiber (g), omega3 (g), iron (mg), magnesium (mg), calcium (mg).
 Reponds UNIQUEMENT avec un objet JSON valide respectant strictement ce format :
@@ -40,13 +43,14 @@ SYSTEM_PROMPT_CHAT_AGENT = """Tu es l'assistant nutritionnel et sportif qui pilo
 Tu dois analyser le message de l'utilisateur et retourner un objet JSON contenant :
 1. "actions" : liste d'opérations à exécuter sur la base de données (peut être vide si l'utilisateur pose seulement une question).
    Types d'actions possibles :
-   - {"type": "add_meal", "meal_date": "YYYY-MM-DD", "meal_type": "petit_dejeuner|dejeuner|collation|diner", "dish_text": "intitulé du plat sans les périphériques déjà listés", "peripherals": ["id_peripherique"], "portion_size": "leger|normal|copieux"}
+   - {"type": "add_meal", "meal_date": "YYYY-MM-DD", "meal_type": "petit_dejeuner|dejeuner|gouter|collation|diner", "dish_text": "intitulé du plat SANS les éléments déjà placés dans peripherals", "peripherals": ["id_peripherique"], "portion_size": "leger|normal|copieux"}
    - {"type": "update_meal", "meal_id": 12, "dish_text": "nouveau texte", "peripherals": ["id_peripherique"], "portion_size": "leger|normal|copieux"}
    - {"type": "delete_meal", "meal_id": 12}
    - {"type": "add_workout", "workout_date": "YYYY-MM-DD", "category": "endurance|force|hiit_sport_co|velo_natation|mobilite_marche", "title": "Titre propre", "duration_min": 60, "intensity": "douce|moderee|intense", "status": "realisee|prevue"}
    - {"type": "update_workout_status", "workout_id": 5, "status": "realisee|prevue"}
    - {"type": "delete_workout", "workout_id": 5}
    - {"type": "update_profile", "weight_kg": 74.0, "goal": "maintien|performance|prise_masse|seche"}
+   IMPORTANT pour add_meal / update_meal : Si tu ajoutes un périphérique dans "peripherals" (ex: "fromage_blanc" pour du skyr, "banane" pour une banane), retire-le impérativement de "dish_text" pour qu'il ne soit jamais compté deux fois. Si tout le repas est couvert par "dish_text", laisse "peripherals": [].
 2. "reply" : ta réponse directe à l'utilisateur en français (2 à 4 phrases maximum, ton sobre, précis, sans aucun emoji ni jargon IA). Confirme ce que tu viens d'enregistrer/modifier, commente son positionnement sur la moyenne glissante de 7 jours et propose des exemples concrets de plats ou d'aliments pour combler ses lacunes ou préparer ses séances prévues.
 
 IDs des périphériques disponibles :
@@ -55,7 +59,12 @@ pain_levain, pain_blanc, comte_fromage, fromage_blanc, yaourt_nature, fruit_sais
 Reponds UNIQUEMENT en JSON valide : {"actions": [...], "reply": "..."}."""
 
 
-def _sanitize_llm_payload(raw_data: Dict[str, Any], fallback_text: str) -> Dict[str, Any]:
+def _sanitize_llm_payload(
+    raw_data: Dict[str, Any],
+    fallback_text: str,
+    meal_type: str = "dejeuner",
+    already_peripherals: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     components_in = raw_data.get("components", [])
     clean_components = []
     for comp in components_in:
@@ -70,7 +79,7 @@ def _sanitize_llm_payload(raw_data: Dict[str, Any], fallback_text: str) -> Dict[
         clean_components.append({"name": name, "nutrients": clean_nutr})
 
     if not clean_components:
-        return evaluate_dish_locally(fallback_text)
+        return evaluate_dish_locally(fallback_text, meal_type=meal_type, already_peripherals=already_peripherals)
 
     total = sum_nutrients([c["nutrients"] for c in clean_components])
     return {
@@ -162,7 +171,13 @@ def _resolve_provider_and_key(profile_settings: Dict[str, Any]) -> Tuple[str, st
     return provider, api_key, model_name
 
 
-def _call_gemini_api(dish_text: str, api_key: str, model: str = "gemini-2.0-flash") -> Optional[Dict[str, Any]]:
+def _call_gemini_api(
+    dish_text: str,
+    api_key: str,
+    model: str = "gemini-2.0-flash",
+    meal_type: str = "dejeuner",
+    already_peripherals: Optional[List[str]] = None,
+) -> Optional[Dict[str, Any]]:
     models_to_try = [model] if model == "gemini-2.0-flash" else [model, "gemini-2.0-flash"]
     payload = {
         "contents": [
@@ -186,7 +201,12 @@ def _call_gemini_api(dish_text: str, api_key: str, model: str = "gemini-2.0-flas
                 return None
             text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
             parsed = _extract_json_object(text_out)
-            return _sanitize_llm_payload(parsed, dish_text)
+            return _sanitize_llm_payload(
+                parsed,
+                dish_text,
+                meal_type=meal_type,
+                already_peripherals=already_peripherals,
+            )
     return None
 
 
@@ -297,6 +317,8 @@ def evaluate_dish_hybrid(
     dish_text: str,
     cached_entry: Optional[Dict[str, Any]],
     profile_settings: Dict[str, Any],
+    meal_type: str = "dejeuner",
+    already_peripherals: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     norm_key = normalize_dish_key(dish_text)
     if not norm_key:
@@ -329,16 +351,27 @@ def evaluate_dish_hybrid(
                     temperature=0.1,
                 )
                 if parsed:
-                    return _sanitize_llm_payload(parsed, dish_text)
+                    return _sanitize_llm_payload(
+                        parsed,
+                        dish_text,
+                        meal_type=meal_type,
+                        already_peripherals=already_peripherals,
+                    )
             else:
                 target_model = model_name if model_name else "gemini-2.0-flash"
-                res = _call_gemini_api(dish_text, api_key, target_model)
+                res = _call_gemini_api(
+                    dish_text,
+                    api_key,
+                    target_model,
+                    meal_type=meal_type,
+                    already_peripherals=already_peripherals,
+                )
                 if res:
                     return res
         except Exception:
             pass
 
-    return evaluate_dish_locally(dish_text)
+    return evaluate_dish_locally(dish_text, meal_type=meal_type, already_peripherals=already_peripherals)
 
 
 # ============================================================================
@@ -352,7 +385,7 @@ PERIPHERAL_KEYWORDS_MAP: List[Tuple[List[str], str]] = [
     (["fromage blanc", "skyr", "petit suisse"], "fromage_blanc"),
     (["yaourt"], "yaourt_nature"),
     (["banane"], "banane"),
-    (["pomme", "poire", "orange", "kiwi", "clémentine", "clementine", "fruit", "abricot", "peche", "fraise"], "fruit_saison"),
+    (["pomme", "poire", "orange", "kiwi", "clementine", "fruit", "abricot", "peche", "fraise"], "fruit_saison"),
     (["amande", "noix", "noisette", "oleagineux", "poignee de noix", "poignee d'amandes", "cajou"], "poignee_oleagineux"),
     (["chocolat noir", "carre de chocolat", "carres de chocolat", "chocolat"], "chocolat_noir"),
     (["crudite", "salade verte", "petite salade"], "crudites_olive"),
@@ -366,21 +399,22 @@ PERIPHERAL_KEYWORDS_MAP: List[Tuple[List[str], str]] = [
 
 def _extract_relative_date(text_lower: str, today: date) -> Tuple[str, bool]:
     """Retourne (iso_date, is_future)."""
-    if "avant-hier" in text_lower or "avant hier" in text_lower:
+    norm = strip_accents(text_lower).lower()
+    if "avant-hier" in norm or "avant hier" in norm:
         return (today - timedelta(days=2)).isoformat(), False
-    if "apres-demain" in text_lower or "apres demain" in text_lower:
+    if "apres-demain" in norm or "apres demain" in norm:
         return (today + timedelta(days=2)).isoformat(), True
-    if "demain" in text_lower:
+    if "demain" in norm:
         return (today + timedelta(days=1)).isoformat(), True
-    if "hier" in text_lower:
+    if "hier" in norm:
         return (today - timedelta(days=1)).isoformat(), False
 
-    m_in_days = re.search(r"dans\s+(\d+)\s+jour", text_lower)
+    m_in_days = re.search(r"dans\s+(\d+)\s+jour", norm)
     if m_in_days:
         d_plus = min(7, max(1, int(m_in_days.group(1))))
         return (today + timedelta(days=d_plus)).isoformat(), True
 
-    m_ago_days = re.search(r"il y a\s+(\d+)\s+jour", text_lower)
+    m_ago_days = re.search(r"il y a\s+(\d+)\s+jour", norm)
     if m_ago_days:
         d_minus = min(7, max(1, int(m_ago_days.group(1))))
         return (today - timedelta(days=d_minus)).isoformat(), False
@@ -390,11 +424,10 @@ def _extract_relative_date(text_lower: str, today: date) -> Tuple[str, bool]:
         "vendredi": 4, "samedi": 5, "dimanche": 6,
     }
     for w_name, w_idx in weekdays.items():
-        if re.search(rf"\b{w_name}\b", text_lower):
+        if re.search(rf"\b{w_name}\b", norm):
             current_w = today.weekday()
-            # Si futur mentionne ("je vais", "prevu", "prochain", "demain")
             is_future_hint = any(
-                k in text_lower for k in ["prevu", "prevois", "vais", "prochain", "planifie", "ferai"]
+                k in norm for k in ["prevu", "prevois", "vais", "prochain", "planifie", "ferai"]
             )
             if is_future_hint:
                 days_ahead = (w_idx - current_w) % 7
@@ -409,49 +442,59 @@ def _extract_relative_date(text_lower: str, today: date) -> Tuple[str, bool]:
 
 
 def _extract_meal_slot(text_lower: str) -> str:
-    if any(k in text_lower for k in ["petit-dej", "petit dej", "ce matin", "matin", "breakfast"]):
+    norm = strip_accents(text_lower).lower()
+    if any(k in norm for k in ["petit-dej", "petit dej", "petit-dejeuner", "petit dejeuner", "ce matin", "matin", "breakfast"]):
         return "petit_dejeuner"
-    if any(k in text_lower for k in ["gouter", "collation", "cet apres-midi", "apres-midi", "16h"]):
+    if any(k in norm for k in ["gouter", "16h", "17h", "quatre heures", "4 heures"]):
+        return "gouter"
+    if any(k in norm for k in ["collation", "colation", "cet apres-midi", "apres-midi", "en-cas", "encas", "snack"]):
         return "collation"
-    if any(k in text_lower for k in ["diner", "ce soir", "hier soir", "soir", "souper"]):
+    if any(k in norm for k in ["diner", "ce soir", "hier soir", "soir", "souper"]):
         return "diner"
     return "dejeuner"
 
 
 def _extract_portion(text_lower: str) -> str:
-    if any(k in text_lower for k in ["grosse portion", "copieux", "beaucoup", "double portion", "bien mange", "grand bol", "grande assiette"]):
+    norm = strip_accents(text_lower).lower()
+    if any(k in norm for k in ["grosse portion", "copieux", "beaucoup", "double portion", "bien mange", "grand bol", "grande assiette"]):
         return "copieux"
-    if any(k in text_lower for k in ["petite portion", "leger", "un peu", "demi portion", "petit bol"]):
+    if any(k in norm for k in ["petite portion", "leger", "un peu", "demi portion", "petit bol"]):
         return "leger"
     return "normal"
 
 
 def _extract_peripherals_and_clean_dish(segment_text: str) -> Tuple[str, List[str]]:
-    text_lower = segment_text.lower()
+    norm = strip_accents(segment_text).lower()
     found_periphs: List[str] = []
-    cleaned = segment_text
+    cleaned = strip_accents(segment_text)
 
     for kw_list, pid in PERIPHERAL_KEYWORDS_MAP:
         for kw in kw_list:
-            if kw in text_lower:
+            if kw in norm:
                 if pid not in found_periphs:
                     found_periphs.append(pid)
-                # Retirer proprement le peripherique du texte du plat principal s'il est introduit par "avec / et / +"
-                cleaned = re.sub(rf"(?i)\b(avec|et|\+)\s+(un|une|du|de la|des|deux|2|1)?\s*{re.escape(kw)}s?\b", "", cleaned)
+                # Retirer le peripherique du texte du plat principal (qu'il soit precede de 'avec', 'et', ',', ou en debut)
+                cleaned = re.sub(
+                    rf"(?i)(?:[,+]|(?:\b(?:avec|et)\b))?\s*(?:\b(?:un|une|du|de la|des|deux|trois|1|2|3)\b\s*)?(?:\b(?:petit(?:e)?s?|grand(?:e)?s?|gros(?:se)?s?)\b\s*)?(?:\b(?:pot|bol|verre|tranche|morceau|bout|poignee|carre)s?\s+(?:de|d')\s*)?{re.escape(kw)}s?\b",
+                    " ",
+                    cleaned,
+                )
                 break
 
     # Nettoyer les prefixes conversationnels et temporels en boucle
-    for _ in range(3):
+    for _ in range(4):
         cleaned = re.sub(
-            r"(?i)^(j'ai mange|j ai mange|je viens de manger|au dejeuner|au diner|au petit-dejeuner|au petit dejeuner|ce midi|ce matin|ce soir|hier soir|hier midi|aujourd'hui|hier|j'ai pris|j ai pris|ajoute|enregistre|un|une|du|de la|des)\s*(:|,|-)?\s*",
+            r"(?i)^(pour le|pour la|au|a la|en|j'ai mange|j ai mange|je viens de manger|dejeuner|diner|petit-dejeuner|petit dejeuner|petit-dej|petit dej|gouter|collation|colation|ce midi|ce matin|ce soir|cet apres-midi|hier soir|hier midi|aujourd'hui|hier|j'ai pris|j ai pris|ajoute|enregistre|un|une|du|de la|des)\s*(:|,|-)?\s*",
             "",
             cleaned.strip(),
         )
     cleaned = re.sub(
-        r"(?i)\b(ce midi|ce matin|ce soir|hier soir|hier midi|aujourd'hui|hier|en grosse portion|en petite portion|portion normale|copieux|leger)\b",
+        r"(?i)\b(pour le gouter|au gouter|en collation|en colation|ce midi|ce matin|ce soir|cet apres-midi|hier soir|hier midi|aujourd'hui|hier|en grosse portion|en petite portion|portion normale|copieux|leger)\b",
         "",
         cleaned,
     )
+    cleaned = re.sub(r"(?i)^(?:et|avec|\+|,)\s+", "", cleaned.strip())
+    cleaned = re.sub(r"(?i)\s+(?:et|avec|\+|,)$", "", cleaned.strip())
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,.-+:")
     if cleaned:
         cleaned = cleaned[0].upper() + cleaned[1:]
@@ -459,7 +502,7 @@ def _extract_peripherals_and_clean_dish(segment_text: str) -> Tuple[str, List[st
 
 
 def _detect_workout_in_segment(segment_text: str, today: date) -> Optional[Dict[str, Any]]:
-    text_lower = segment_text.lower()
+    text_lower = strip_accents(segment_text).lower()
     sport_triggers = [
         "course", "couru", "courir", "footing", "run", "seuil", "fractionne", "vma", "trail",
         "muscu", "musculation", "renfo", "renforcement", "salle", "jambes", "haut du corps", "force", "crossfit",
@@ -472,10 +515,19 @@ def _detect_workout_in_segment(segment_text: str, today: date) -> Optional[Dict[
         return None
 
     w_date, is_future_date = _extract_relative_date(text_lower, today)
-    is_planned = is_future_date or any(
-        k in text_lower for k in ["prevu", "prevois", "vais", "demain", "apres-demain", "prochain", "planifie", "ferai", "programme"]
-    )
-    status = "prevue" if is_planned else "realisee"
+    today_iso = today.isoformat()
+    if w_date < today_iso:
+        status = "realisee"
+    elif is_future_date or w_date > today_iso:
+        status = "prevue"
+    else:
+        has_future_intent = bool(
+            re.search(
+                r"\b(prevu|prevue|prevois|vais|demain|apres-demain|prochain|prochaine|planifie|ferai|programme|ce soir je)\b",
+                text_lower,
+            )
+        )
+        status = "prevue" if has_future_intent else "realisee"
 
     # Categorie et titre
     if any(k in text_lower for k in ["muscu", "renfo", "force", "salle", "jambes", "haut du corps", "haltere"]):
@@ -552,7 +604,7 @@ def interpret_chat_locally(
         today = date.today()
 
     text = user_message.strip()
-    text_lower = text.lower()
+    text_lower = strip_accents(text).lower()
     actions: List[Dict[str, Any]] = []
 
     # 1. Mise a jour du poids ou de l'objectif
@@ -572,12 +624,11 @@ def interpret_chat_locally(
     if any(k in text_lower for k in ["supprime", "enleve", "efface", "retire", "annule"]):
         target_date, _ = _extract_relative_date(text_lower, today)
         if any(k in text_lower for k in ["seance", "sport", "course", "muscu", "entrainement", "footing", "velo"]):
-            # Chercher la seance correspondante
             candidates = [w for w in workouts if w["workout_date"] == target_date] or workouts
             if candidates:
                 actions.append({"type": "delete_workout", "workout_id": candidates[0]["id"]})
                 return actions
-        elif any(k in text_lower for k in ["repas", "dejeuner", "diner", "petit-dejeuner", "petit dej", "collation", "plat", "dernier"]):
+        elif any(k in text_lower for k in ["repas", "dejeuner", "diner", "petit-dejeuner", "petit dej", "collation", "gouter", "plat", "dernier"]):
             if "dernier" in text_lower and meals:
                 actions.append({"type": "delete_meal", "meal_id": meals[0]["id"]})
                 return actions
@@ -593,7 +644,6 @@ def interpret_chat_locally(
     if any(k in text_lower for k in ["fait ma seance", "seance faite", "valide ma seance", "valider la seance", "fait mon sport"]):
         planned = [w for w in workouts if w["status"] == "prevue"]
         if planned:
-            # Prendre la plus proche
             planned.sort(key=lambda x: x["workout_date"])
             actions.append({"type": "update_workout_status", "workout_id": planned[0]["id"], "status": "realisee"})
             return actions
@@ -601,7 +651,7 @@ def interpret_chat_locally(
     # 4. Modification d'un repas existant ("ajoute une pomme a mon dejeuner", "finalement grosse portion")
     is_modification = any(
         k in text_lower
-        for k in ["ajoute a mon", "rajoute a mon", "a mon dejeuner", "a mon diner", "a mon petit", "finalement"]
+        for k in ["ajoute a mon", "rajoute a mon", "a mon dejeuner", "a mon diner", "a mon petit", "a mon gouter", "finalement"]
     )
     if is_modification and meals:
         target_date, _ = _extract_relative_date(text_lower, today)
@@ -628,16 +678,14 @@ def interpret_chat_locally(
     ]
     is_question = "?" in text or any(q in text_lower for q in question_only_patterns)
 
-    # Decouper la phrase si l'utilisateur combine repas ET sport (ex: "Ce midi j'ai mange X et demain je cours 1h")
     clauses = re.split(r"\b(?:et sinon|et demain|et hier|et aujourd'hui|et je prevois|et j'ai couru|et j'ai fait|;\s*)\b", text, flags=re.IGNORECASE)
     if len(clauses) == 1:
         clauses = [text]
     else:
-        # Reconstruire proprement les connecteurs coupes si besoin
         clauses = [c.strip() for c in re.split(r"[.;]|(?=\bdemain\b|\bhier\b|\bje prevois\b|\bj'ai couru\b)", text, flags=re.IGNORECASE) if c.strip()]
 
     for clause in clauses:
-        clause_lower = clause.lower()
+        clause_lower = strip_accents(clause).lower()
         w_action = _detect_workout_in_segment(clause, today)
         if w_action and not any(q in clause_lower for q in ["que manger", "quoi manger", "bilan", "conseil"]):
             actions.append(w_action)
@@ -650,6 +698,7 @@ def interpret_chat_locally(
             "poulet", "saumon", "boeuf", "steak", "pates", "riz", "lasagne", "pizza", "burger", "salade",
             "omelette", "oeuf", "flocons", "avoine", "tartine", "soupe", "sandwich", "poke", "ramen",
             "dahl", "lentilles", "chili", "couscous", "quiche", "tofu", "maquereau", "cabillaud", "thon",
+            "gaufre", "crepe", "pancake", "croissant", "pain au chocolat", "compote", "muffin", "madeleine",
         ]
         _, detected_periphs = _extract_peripherals_and_clean_dish(clause)
         has_food = any(k in clause_lower for k in meal_indicators) or len(detected_periphs) > 0

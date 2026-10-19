@@ -99,6 +99,7 @@ PORTION_MULTIPLIERS = {
 MEAL_SLOT_WEIGHTS = {
     "petit_dejeuner": 0.22,
     "dejeuner": 0.38,
+    "gouter": 0.12,
     "collation": 0.10,
     "diner": 0.35,
 }
@@ -722,16 +723,116 @@ CULINARY_COMPONENTS_DB: List[Dict[str, Any]] = [
             "fiber": 4.2, "omega3": 0.15, "iron": 1.2, "magnesium": 36, "calcium": 55, "water_ml": 265
         },
     },
+    # Collations, petits-dejeuners et patisseries courantes (valeurs unitaires / portion standard Ciqual)
+    {
+        "keywords": ["gaufre"],
+        "name": "Gaufre (unité 45g)",
+        "role": "collation_sucree",
+        "unit_Countable": True,
+        "nutrients": {
+            "calories": 185, "proteins": 3.2, "carbs": 24.0, "lipids": 8.5,
+            "fiber": 0.9, "omega3": 0.04, "iron": 0.6, "magnesium": 10, "calcium": 28, "water_ml": 8
+        },
+    },
+    {
+        "keywords": ["crepe", "pancake"],
+        "name": "Crêpe / Pancake (unité 55g)",
+        "role": "collation_sucree",
+        "unit_Countable": True,
+        "nutrients": {
+            "calories": 130, "proteins": 3.8, "carbs": 18.5, "lipids": 4.2,
+            "fiber": 0.7, "omega3": 0.05, "iron": 0.6, "magnesium": 11, "calcium": 48, "water_ml": 26
+        },
+    },
+    {
+        "keywords": ["croissant", "pain au chocolat", "chocolatine", "viennoiserie", "chausson aux pommes"],
+        "name": "Viennoiserie (unité 65g)",
+        "role": "collation_sucree",
+        "unit_Countable": True,
+        "nutrients": {
+            "calories": 270, "proteins": 5.2, "carbs": 30.0, "lipids": 14.5,
+            "fiber": 1.6, "omega3": 0.06, "iron": 0.9, "magnesium": 16, "calcium": 25, "water_ml": 14
+        },
+    },
+    {
+        "keywords": ["compote"],
+        "name": "Compote de fruits sans sucres ajoutés (100g)",
+        "role": "collation_fruit",
+        "unit_Countable": True,
+        "nutrients": {
+            "calories": 62, "proteins": 0.4, "carbs": 14.0, "lipids": 0.2,
+            "fiber": 1.8, "omega3": 0.01, "iron": 0.2, "magnesium": 6, "calcium": 8, "water_ml": 82
+        },
+    },
+    {
+        "keywords": ["barre cereale", "barre de cereale", "barre energetique"],
+        "name": "Barre céréalière / énergétique (unité 35g)",
+        "role": "collation_sucree",
+        "unit_Countable": True,
+        "nutrients": {
+            "calories": 145, "proteins": 2.8, "carbs": 23.0, "lipids": 4.5,
+            "fiber": 2.2, "omega3": 0.05, "iron": 0.8, "magnesium": 24, "calcium": 18, "water_ml": 3
+        },
+    },
+    {
+        "keywords": ["barre proteine", "shaker", "whey"],
+        "name": "Shaker / Barre protéinée (portion standard)",
+        "role": "collation_proteine",
+        "unit_Countable": True,
+        "nutrients": {
+            "calories": 135, "proteins": 23.0, "carbs": 4.5, "lipids": 2.5,
+            "fiber": 1.5, "omega3": 0.02, "iron": 0.5, "magnesium": 28, "calcium": 140, "water_ml": 200
+        },
+    },
+    {
+        "keywords": ["madeleine", "financier", "muffin", "cake", "brownie"],
+        "name": "Petit gâteau / Pâtisserie individuelle (50g)",
+        "role": "collation_sucree",
+        "unit_Countable": True,
+        "nutrients": {
+            "calories": 220, "proteins": 3.4, "carbs": 27.0, "lipids": 11.0,
+            "fiber": 0.9, "omega3": 0.06, "iron": 0.7, "magnesium": 12, "calcium": 22, "water_ml": 9
+        },
+    },
 ]
 
 
+def strip_accents(text: str) -> str:
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFD", text or "")
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
 def normalize_dish_key(dish_text: str) -> str:
-    cleaned = dish_text.strip().lower()
+    cleaned = strip_accents(dish_text).strip().lower()
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned
 
 
-def evaluate_dish_locally(dish_text: str) -> Dict[str, Any]:
+def _extract_item_quantity(text_no_accents: str, matched_keyword: str) -> float:
+    """Detecte une quantite explicite devant un mot-cle (ex: '2 gaufres', 'trois crepes', '1/2')."""
+    word_numbers = {
+        "un": 1.0, "une": 1.0, "deux": 2.0, "trois": 3.0, "quatre": 4.0, "cinq": 5.0,
+        "demi": 0.5, "moitie": 0.5,
+    }
+    pattern = rf"(?:(\d+(?:[.,]\d+)?)\s*(?:petit(?:e)?s?\s+|grand(?:e)?s?\s+|gros(?:se)?s?\s+|pot(?:s)?\s+de\s+|bol(?:s)?\s+de\s+)?|(un|une|deux|trois|quatre|cinq|demi)\s+(?:petit(?:e)?s?\s+|grand(?:e)?s?\s+|pot(?:s)?\s+de\s+)?){re.escape(matched_keyword)}"
+    m = re.search(pattern, text_no_accents)
+    if not m:
+        return 1.0
+    if m.group(1):
+        val = float(m.group(1).replace(",", "."))
+        return max(0.25, min(8.0, val))
+    if m.group(2):
+        return word_numbers.get(m.group(2), 1.0)
+    return 1.0
+
+
+def evaluate_dish_locally(
+    dish_text: str,
+    meal_type: str = "dejeuner",
+    already_peripherals: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """
     Analyse deterministe d'un texte libre de plat en composantes nutritionnelles
     (utilisee en fallback immediat ou pour completer le moteur hybride).
@@ -748,47 +849,66 @@ def evaluate_dish_locally(dish_text: str) -> Dict[str, Any]:
     matched_modular = []
 
     for entry in CULINARY_COMPONENTS_DB:
-        if any(kw in text_lower for kw in entry["keywords"]):
+        matched_kw = next((kw for kw in entry["keywords"] if kw in text_lower), None)
+        if matched_kw:
             if entry["role"] == "plat_complet":
-                matched_complete.append(entry)
+                matched_complete.append((entry, matched_kw))
             else:
-                matched_modular.append(entry)
+                matched_modular.append((entry, matched_kw))
 
     selected_components = []
     if matched_complete:
-        # On prend le plat complet principal identifie
-        primary = matched_complete[0]
+        primary, _ = matched_complete[0]
         selected_components.append({
             "name": primary["name"],
             "nutrients": dict(primary["nutrients"]),
         })
-        # Si l'utilisateur a mentionne explicitement un supplement non inclus (ex: avocat, soupe)
-        for mod in matched_modular:
-            if mod["role"] in ("accompagnement_lipide",) and mod["name"] != primary["name"]:
+        for mod, kw in matched_modular:
+            if mod["role"] in ("accompagnement_lipide", "collation_sucree", "collation_fruit", "collation_proteine") and mod["name"] != primary["name"]:
+                qty = _extract_item_quantity(text_lower, kw) if mod.get("unit_Countable") else 1.0
+                comp_name = f"{int(qty) if qty.is_integer() else qty}x {mod['name']}" if qty != 1.0 else mod["name"]
                 selected_components.append({
-                    "name": mod["name"],
-                    "nutrients": dict(mod["nutrients"]),
+                    "name": comp_name,
+                    "nutrients": scale_nutrients(mod["nutrients"], qty),
                 })
     elif matched_modular:
         seen_roles = set()
-        for mod in matched_modular:
-            # Permet de combiner Proteine + Feculent + Legume + Avocat
+        for mod, kw in matched_modular:
             role_key = mod["role"]
-            if role_key not in seen_roles or role_key in ("legume", "accompagnement_lipide"):
+            allow_multiple = role_key in ("legume", "accompagnement_lipide", "collation_sucree", "collation_fruit", "collation_proteine")
+            if role_key not in seen_roles or allow_multiple:
+                qty = _extract_item_quantity(text_lower, kw) if mod.get("unit_Countable") else 1.0
+                comp_name = f"{int(qty) if qty.is_integer() else qty}x {mod['name']}" if qty != 1.0 else mod["name"]
                 selected_components.append({
-                    "name": mod["name"],
-                    "nutrients": dict(mod["nutrients"]),
+                    "name": comp_name,
+                    "nutrients": scale_nutrients(mod["nutrients"], qty),
                 })
                 seen_roles.add(role_key)
     else:
-        # Estimation intelligente d'une assiette equilibree standard si aucun mot-cle exact n'est trouve
-        selected_components.append({
-            "name": f"Assiette estimée : {dish_text.strip().capitalize()} (portion standard)",
-            "nutrients": {
-                "calories": 560, "proteins": 28.0, "carbs": 58.0, "lipids": 22.0,
-                "fiber": 4.8, "omega3": 0.35, "iron": 2.8, "magnesium": 64, "calcium": 95, "water_ml": 220
-            },
-        })
+        # Si des peripheriques ont deja ete identifies et qu'aucun plat connu n'est dans le reste du texte,
+        # ne pas inventer une assiette fantome a 560 kcal / 28g de proteines.
+        if already_peripherals:
+            return {
+                "nutrients": empty_nutrients(),
+                "components": [],
+                "eval_source": "peripheriques_seuls",
+            }
+        if meal_type in ("collation", "gouter", "petit_dejeuner"):
+            selected_components.append({
+                "name": f"Collation / Petit-déjeuner estimé : {dish_text.strip().capitalize()}",
+                "nutrients": {
+                    "calories": 240, "proteins": 7.0, "carbs": 34.0, "lipids": 8.0,
+                    "fiber": 2.5, "omega3": 0.10, "iron": 1.0, "magnesium": 28, "calcium": 85, "water_ml": 90
+                },
+            })
+        else:
+            selected_components.append({
+                "name": f"Assiette estimée : {dish_text.strip().capitalize()} (portion standard)",
+                "nutrients": {
+                    "calories": 520, "proteins": 24.0, "carbs": 54.0, "lipids": 20.0,
+                    "fiber": 4.5, "omega3": 0.30, "iron": 2.5, "magnesium": 58, "calcium": 85, "water_ml": 210
+                },
+            })
 
     total_nutrients = sum_nutrients([c["nutrients"] for c in selected_components])
     return {

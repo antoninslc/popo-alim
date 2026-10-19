@@ -849,7 +849,14 @@ def list_workouts(
     user_id: str = "default",
 ) -> List[Dict[str, Any]]:
     uid = normalize_user_id(user_id)
+    today_iso = date.today().isoformat()
     conn = get_connection()
+    conn.execute(
+        "UPDATE workouts SET status = 'realisee' WHERE user_id = ? AND status = 'prevue' AND workout_date < ?",
+        (uid, today_iso),
+    )
+    if conn.rowcount > 0:
+        conn.commit()
     query = "SELECT * FROM workouts WHERE user_id = ?"
     params: List[Any] = [uid]
     if start_date and end_date:

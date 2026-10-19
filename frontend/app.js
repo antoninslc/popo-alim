@@ -1,13 +1,15 @@
 const SLOT_ORDER = {
     petit_dejeuner: 1,
     dejeuner: 2,
-    collation: 3,
-    diner: 4,
+    gouter: 3,
+    collation: 4,
+    diner: 5,
 };
 
 const SLOT_SHORT = {
-    petit_dejeuner: "Matin",
+    petit_dejeuner: "Petit-déj",
     dejeuner: "Midi",
+    gouter: "Goûter",
     collation: "Collation",
     diner: "Soir",
 };

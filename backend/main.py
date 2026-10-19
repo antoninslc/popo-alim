@@ -31,6 +31,7 @@ from backend.database import (
     update_workout_status,
 )
 from backend.llm_service import (
+    _extract_peripherals_and_clean_dish,
     call_llm_chat_agent,
     compose_contextual_reply,
     evaluate_dish_hybrid,
@@ -158,25 +159,42 @@ def _execute_agent_actions(
         if act_type == "add_meal":
             m_date = act.get("meal_date") or today_iso
             m_type = act.get("meal_type") or "dejeuner"
-            dish_txt = str(act.get("dish_text") or "").strip()
+            raw_dish_txt = str(act.get("dish_text") or "").strip()
             periphs = [p for p in (act.get("peripherals") or []) if p in PERIPHERALS_BY_ID]
             portion = act.get("portion_size") or "normal"
 
+            # Si des peripheriques sont fournis (ou detectables dans dish_text), nettoyer dish_text pour eviter tout double comptage
+            cleaned_dish_txt, extra_periphs = _extract_peripherals_and_clean_dish(raw_dish_txt)
+            if periphs:
+                dish_txt = cleaned_dish_txt
+            else:
+                dish_txt = cleaned_dish_txt
+                periphs = [p for p in extra_periphs if p in PERIPHERALS_BY_ID]
+
             cached = get_cached_dish(dish_txt)
-            dish_eval = evaluate_dish_hybrid(dish_txt, cached, profile)
-            if dish_txt and cached is None:
+            dish_eval = evaluate_dish_hybrid(
+                dish_txt,
+                cached,
+                profile,
+                meal_type=m_type,
+                already_peripherals=periphs,
+            )
+            if dish_txt and cached is None and dish_eval.get("eval_source") != "peripheriques_seuls":
                 save_cached_dish(dish_txt, dish_eval)
 
             assembled = assemble_meal_evaluation(dish_eval, periphs, portion)
-            label_display = dish_txt if dish_txt else "Peripheriques"
-            if periphs:
-                p_names = [PERIPHERALS_BY_ID[pid]["label"] for pid in periphs]
-                label_display = f"{dish_txt} + {', '.join(p_names)}" if dish_txt else ", ".join(p_names)
+            p_names = [PERIPHERALS_BY_ID[pid]["label"] for pid in periphs]
+            if dish_txt and p_names:
+                label_display = f"{dish_txt} + {', '.join(p_names)}"
+            elif dish_txt:
+                label_display = dish_txt
+            else:
+                label_display = ", ".join(p_names) if p_names else "Peripheriques"
 
             created = insert_meal(
                 meal_date=m_date,
                 meal_type=m_type,
-                dish_text=dish_txt or ", ".join(PERIPHERALS_BY_ID[pid]["label"] for pid in periphs),
+                dish_text=label_display,
                 peripherals=periphs,
                 portion_size=portion,
                 assembled=assembled,
@@ -189,13 +207,24 @@ def _execute_agent_actions(
             meal_id = int(act.get("meal_id", 0))
             target = next((m for m in existing_meals if m["id"] == meal_id), None)
             if target:
-                dish_txt = str(act.get("dish_text") or target["dish_text"]).strip()
+                raw_dish_txt = str(act.get("dish_text") or target["dish_text"]).strip()
                 periphs = [p for p in (act.get("peripherals") or target["peripherals"]) if p in PERIPHERALS_BY_ID]
                 portion = act.get("portion_size") or target["portion_size"]
+                m_type = target.get("meal_type") or "dejeuner"
+                cleaned_dish_txt, _ = _extract_peripherals_and_clean_dish(raw_dish_txt)
+                dish_txt = cleaned_dish_txt if periphs else raw_dish_txt
                 cached = get_cached_dish(dish_txt)
-                dish_eval = evaluate_dish_hybrid(dish_txt, cached, profile)
+                dish_eval = evaluate_dish_hybrid(
+                    dish_txt,
+                    cached,
+                    profile,
+                    meal_type=m_type,
+                    already_peripherals=periphs,
+                )
                 assembled = assemble_meal_evaluation(dish_eval, periphs, portion)
-                update_meal_by_id(meal_id, dish_txt, periphs, portion, assembled, user_id=uid)
+                p_names = [PERIPHERALS_BY_ID[pid]["label"] for pid in periphs]
+                display_txt = f"{dish_txt} + {', '.join(p_names)}" if (dish_txt and p_names) else (dish_txt or ", ".join(p_names))
+                update_meal_by_id(meal_id, display_txt, periphs, portion, assembled, user_id=uid)
                 summaries.append(f"Repas #{meal_id} mis a jour ({round(assembled['nutrients']['calories'])} kcal)")
 
         elif act_type == "delete_meal":
@@ -209,7 +238,12 @@ def _execute_agent_actions(
             title = str(act.get("title") or "Seance de sport").strip()
             dur = max(10, int(act.get("duration_min") or 50))
             intensity = act.get("intensity") or "moderee"
-            status = act.get("status") or ("prevue" if w_date > today_iso else "realisee")
+            if w_date < today_iso:
+                status = "realisee"
+            elif w_date > today_iso:
+                status = "prevue"
+            else:
+                status = act.get("status") or "realisee"
             exp = calculate_workout_expenditure(cat, dur, intensity, weight_kg)
             insert_workout(w_date, cat, title, dur, intensity, status, exp, user_id=uid)
             state_lbl = "prevue" if status == "prevue" else "realisee"
