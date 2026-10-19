@@ -422,7 +422,10 @@ function renderState(state, options = {}) {
                 const boxEl = groupEl.querySelector(".day-group-box");
                 dayMeals.forEach((m) => {
                     const n = m.nutrients || {};
-                    const periphNames = (m.peripherals || []).map((pid) => catalogMap[pid] || pid);
+                    const dishTextLower = (m.dish_text || "").toLowerCase();
+                    const periphNames = (m.peripherals || [])
+                        .map((pid) => catalogMap[pid] || pid)
+                        .filter((pname) => !dishTextLower.includes(pname.toLowerCase()));
                     const periphSub = periphNames.length ? `<span class="item-sub">+ ${periphNames.join(", ")}</span>` : "";
                     const portionSub = m.portion_size && m.portion_size !== "normal" ? `<span class="item-sub">[${m.portion_size}]</span>` : "";
                     const isExpanded = expandedMealIds.has(m.id);

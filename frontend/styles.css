@@ -197,40 +197,34 @@ body {
 /* Barre d'input IA figee au scroll */
 .spotlight-sticky-container {
     position: sticky;
-    top: 0;
+    top: 12px;
     z-index: 100;
-    margin-top: -12px;
-    margin-left: -24px;
-    margin-right: -24px;
-    padding-top: 12px;
-    padding-bottom: 12px;
-    padding-left: 24px;
-    padding-right: 24px;
-    background: rgba(245, 245, 247, 0.85);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: 1px solid transparent;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.spotlight-sticky-container.is-stuck {
-    border-bottom-color: rgba(0, 0, 0, 0.06);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.03);
+    pointer-events: none;
 }
 
 .spotlight-bar {
+    pointer-events: auto;
     position: relative;
     display: flex;
     align-items: center;
-    background: var(--bg-card);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
     border-radius: var(--radius-pill);
     border: 1px solid rgba(0, 0, 0, 0.08);
     box-shadow: var(--shadow-spotlight);
     padding: 6px 6px 6px 22px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.spotlight-sticky-container.is-stuck .spotlight-bar {
+    background: rgba(255, 255, 255, 0.96);
+    border-color: rgba(0, 0, 0, 0.13);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .spotlight-bar:focus-within {
+    background: #FFFFFF;
     border-color: rgba(0, 0, 0, 0.28);
     box-shadow: 0 12px 36px rgba(0, 0, 0, 0.08), 0 0 0 4px rgba(0, 113, 227, 0.08);
 }
@@ -279,7 +273,6 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin-top: -10px;
 }
 
 .suggestions-bar {
@@ -1170,17 +1163,7 @@ body {
 
     /* Spotlight bar & Suggestions */
     .spotlight-sticky-container {
-        margin-left: -16px;
-        margin-right: -16px;
-        padding-left: 16px;
-        padding-right: 16px;
-        padding-top: 8px;
-        padding-bottom: 10px;
-        margin-top: -8px;
-    }
-
-    .hero-assistant-section {
-        margin-top: -6px;
+        top: 8px;
     }
 
     .spotlight-bar {

@@ -90,7 +90,7 @@ Tu dois analyser le message de l'utilisateur et retourner un objet JSON contenan
        "type": "add_meal",
        "meal_date": "YYYY-MM-DD",
        "meal_type": "petit_dejeuner|dejeuner|gouter|collation|diner",
-       "dish_text": "intitulé du plat SANS les éléments déjà placés dans peripherals",
+       "dish_text": "Titre TRÈS COURT et synthétique du repas (2 à 5 mots max, ex: 'Salade de riz & poulet', 'Menu McDonald\\'s', 'Gaufres & skyr') SANS reprendre la phrase de l'utilisateur ni les éléments déjà dans peripherals",
        "peripherals": ["id_peripherique"],
        "portion_size": "leger|normal|copieux",
        "components": [
@@ -106,7 +106,7 @@ Tu dois analyser le message de l'utilisateur et retourner un objet JSON contenan
    - {
        "type": "update_meal",
        "meal_id": 12,
-       "dish_text": "nouveau texte SANS les périphériques",
+       "dish_text": "Titre TRÈS COURT et synthétique du repas (2 à 5 mots max) SANS reprendre la phrase de l'utilisateur ni les périphériques",
        "peripherals": ["id_peripherique"],
        "portion_size": "leger|normal|copieux",
        "components": [
@@ -124,7 +124,8 @@ Tu dois analyser le message de l'utilisateur et retourner un objet JSON contenan
    - {"type": "update_workout_status", "workout_id": 5, "status": "realisee|prevue"}
    - {"type": "delete_workout", "workout_id": 5}
    - {"type": "update_profile", "weight_kg": 74.0, "goal": "maintien|performance|prise_masse|seche"}
-   RÈGLES NUTRITIONNELLES IMPORTANTES pour add_meal / update_meal :
+   RÈGLES NUTRITIONNELLES ET DE TITRAGE IMPORTANTES pour add_meal / update_meal :
+   - TITRE DU REPAS ("dish_text") : Ne recopie JAMAIS le prompt ou la phrase de l'utilisateur ("J'ai mangé...", "Pour le goûter...", "En entrée..."). Rédige toujours un résumé très court, propre et élégant de 2 à 5 mots maximum (ex: "Salade de riz & poulet", "Menu McDo", "2 gaufres").
    - Si tu ajoutes un périphérique dans "peripherals" (ex: "fromage_blanc" pour du skyr, "banane" pour une banane), retire-le impérativement de "dish_text" ET de "components" pour qu'il ne soit jamais compté deux fois.
    - Si "dish_text" est non vide, fournis TOUJOURS "components" avec l'estimation Ciqual réaliste de chaque ingrédient principal (respecte les quantités : ex 100g viande/poisson cuit ≈ 24-28g protéines, 1 œuf ≈ 6.5g protéines, 1 gaufre ≈ 3g protéines, calories ≈ P*4 + G*4 + L*9 + Fibres*2). Si tout le repas est couvert par "peripherals", laisse "dish_text": "" et "components": [].
 2. "reply" : ta réponse directe à l'utilisateur en français (2 à 4 phrases maximum, ton sobre, précis, sans aucun emoji ni jargon IA). Confirme ce que tu viens d'enregistrer/modifier, commente son positionnement sur la moyenne glissante de 7 jours et propose des exemples concrets de plats ou d'aliments pour combler ses lacunes ou préparer ses séances prévues.
@@ -465,7 +466,7 @@ PERIPHERAL_KEYWORDS_MAP: List[Tuple[List[str], str]] = [
     (["baguette"], "pain_blanc"),
     (["comte", "tomme", "fromage affine", "morceau de fromage", "bout de fromage"], "comte_fromage"),
     (["fromage blanc", "skyr", "petit suisse"], "fromage_blanc"),
-    (["yaourt"], "yaourt_nature"),
+    (["yaourt nature", "yaourt"], "yaourt_nature"),
     (["banane"], "banane"),
     (["pomme", "poire", "orange", "kiwi", "clementine", "fruit", "abricot", "peche", "fraise"], "fruit_saison"),
     (["amande", "noix", "noisette", "oleagineux", "poignee de noix", "poignee d'amandes", "cajou"], "poignee_oleagineux"),
@@ -548,7 +549,7 @@ def _extract_portion(text_lower: str) -> str:
 def _extract_peripherals_and_clean_dish(segment_text: str) -> Tuple[str, List[str]]:
     norm = strip_accents(segment_text).lower()
     found_periphs: List[str] = []
-    cleaned = strip_accents(segment_text)
+    cleaned = strip_accents(segment_text).replace("’", "'").replace("‘", "'")
 
     for kw_list, pid in PERIPHERAL_KEYWORDS_MAP:
         for kw in kw_list:
@@ -564,14 +565,14 @@ def _extract_peripherals_and_clean_dish(segment_text: str) -> Tuple[str, List[st
                 break
 
     # Nettoyer les prefixes conversationnels et temporels en boucle
-    for _ in range(4):
+    for _ in range(5):
         cleaned = re.sub(
-            r"(?i)^(pour le|pour la|au|a la|en|j'ai mange|j ai mange|je viens de manger|dejeuner|diner|petit-dejeuner|petit dejeuner|petit-dej|petit dej|gouter|collation|colation|ce midi|ce matin|ce soir|cet apres-midi|hier soir|hier midi|aujourd'hui|hier|j'ai pris|j ai pris|ajoute|enregistre|un|une|du|de la|des)\s*(:|,|-)?\s*",
+            r"(?i)^(pour le|pour la|au|a la|en|j'ai mange|j ai mange|je viens de manger|on a mange|j'ai pris|j ai pris|j'ai fait|j ai fait|dejeuner|diner|petit-dejeuner|petit dejeuner|petit-dej|petit dej|gouter|collation|colation|ce midi|ce matin|ce soir|cet apres-midi|hier soir|hier midi|aujourd'hui|hier|ajoute|enregistre|un|une|du|de la|des|le|la|les)\s*(:|,|-)?\s*",
             "",
             cleaned.strip(),
         )
     cleaned = re.sub(
-        r"(?i)\b(pour le gouter|au gouter|en collation|en colation|ce midi|ce matin|ce soir|cet apres-midi|hier soir|hier midi|aujourd'hui|hier|en grosse portion|en petite portion|portion normale|copieux|leger)\b",
+        r"(?i)\b(pour le gouter|au gouter|en collation|en colation|en entree|en plat|en plat principal|en dessert|ce midi|ce matin|ce soir|cet apres-midi|hier soir|hier midi|aujourd'hui|hier|en grosse portion|en petite portion|portion normale|copieux|leger)\b",
         "",
         cleaned,
     )
@@ -581,6 +582,54 @@ def _extract_peripherals_and_clean_dish(segment_text: str) -> Tuple[str, List[st
     if cleaned:
         cleaned = cleaned[0].upper() + cleaned[1:]
     return cleaned, found_periphs
+
+
+def summarize_meal_title(dish_text: str, components: Optional[List[Dict[str, Any]]] = None, peripherals: Optional[List[str]] = None) -> str:
+    """Genere un titre de repas tres court et propre (2 a 5 mots max) sans reprendre le prompt brut."""
+    raw = (dish_text or "").replace("’", "'").replace("‘", "'").strip()
+    # Nettoyer tout reste de prompt conversationnel
+    for _ in range(4):
+        raw = re.sub(
+            r"(?i)^(pour le|pour la|au|a la|en|j'ai mange|j ai mange|je viens de manger|on a mange|j'ai pris|j ai pris|dejeuner|diner|petit-dejeuner|petit dejeuner|petit-dej|petit dej|gouter|collation|colation|ce midi|ce matin|ce soir|cet apres-midi|hier soir|hier midi|aujourd'hui|hier|ajoute|enregistre)\s*(:|,|-)?\s*",
+            "",
+            raw.strip(),
+        )
+    raw = re.sub(
+        r"(?i)\b(en entree|en plat principal|en plat|en dessert|pour le gouter|au gouter|en collation|ce midi|ce matin|ce soir|hier soir|hier midi)\b",
+        "",
+        raw,
+    )
+    raw = re.sub(r"(?i)^(?:un\s+|une\s+|petit\s+|grand\s+)?(?:bol|assiette|plat|portion)\s+de\s+", "", raw)
+    raw = re.sub(r"\s*,\s*", ", ", raw)
+    raw = re.sub(r"\s+", " ", raw).strip(" ,.-+:")
+
+    # Si le texte reste trop long (> 34 caracteres), construire un resume court depuis les composantes ou les premiers elements
+    if len(raw) > 34 and components:
+        short_names = []
+        for comp in components[:3]:
+            cname = str(comp.get("name") or "").strip()
+            # Retirer les parentheses et les grammages ex "(150g)" ou "150g"
+            cname = re.sub(r"\([^)]*\)", "", cname)
+            cname = re.sub(r"\b\d+\s*(?:g|ml|cl|kg|kcal)\b", "", cname, flags=re.IGNORECASE)
+            cname = re.sub(r"\s+", " ", cname).strip(" ,.-+:")
+            if cname:
+                short_names.append(cname)
+        if short_names:
+            candidate = ", ".join(short_names)
+            if len(candidate) <= 44:
+                raw = candidate
+
+    if len(raw) > 38:
+        parts = [p.strip() for p in re.split(r"[,;+]|(?:\bet\b)", raw) if p.strip()]
+        if len(parts) >= 2:
+            raw = f"{parts[0]}, {parts[1]}"
+        if len(raw) > 38:
+            words = raw.split()
+            raw = " ".join(words[:5]).rstrip(",;:")
+
+    if raw:
+        raw = raw[0].upper() + raw[1:]
+    return raw
 
 
 def _detect_workout_in_segment(segment_text: str, today: date) -> Optional[Dict[str, Any]]:

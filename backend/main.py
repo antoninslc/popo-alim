@@ -39,6 +39,7 @@ from backend.llm_service import (
     evaluate_dish_hybrid,
     has_env_gemini_key,
     interpret_chat_locally,
+    summarize_meal_title,
     verify_llm_connection,
 )
 from backend.nutrition_engine import (
@@ -195,24 +196,25 @@ def _execute_agent_actions(
 
             assembled = assemble_meal_evaluation(dish_eval, periphs, portion)
             p_names = [PERIPHERALS_BY_ID[pid]["label"] for pid in periphs]
-            if dish_txt and p_names:
-                label_display = f"{dish_txt} + {', '.join(p_names)}"
-            elif dish_txt:
-                label_display = dish_txt
+            short_title = summarize_meal_title(dish_txt, dish_eval.get("components"), periphs)
+            if short_title:
+                stored_title = short_title
+                summary_display = f"{short_title} + {', '.join(p_names)}" if p_names else short_title
             else:
-                label_display = ", ".join(p_names) if p_names else "Peripheriques"
+                stored_title = ", ".join(p_names) if p_names else "Repas"
+                summary_display = stored_title
 
             created = insert_meal(
                 meal_date=m_date,
                 meal_type=m_type,
-                dish_text=label_display,
+                dish_text=stored_title,
                 peripherals=periphs,
                 portion_size=portion,
                 assembled=assembled,
                 user_id=uid,
             )
             kcal = round(created["nutrients"]["calories"])
-            summaries.append(f"Repas ajoute ({label_display}, {kcal} kcal)")
+            summaries.append(f"Repas ajoute ({summary_display}, {kcal} kcal)")
 
         elif act_type == "update_meal":
             meal_id = int(act.get("meal_id", 0))
@@ -245,7 +247,8 @@ def _execute_agent_actions(
                     save_cached_dish(dish_txt, dish_eval)
                 assembled = assemble_meal_evaluation(dish_eval, periphs, portion)
                 p_names = [PERIPHERALS_BY_ID[pid]["label"] for pid in periphs]
-                display_txt = f"{dish_txt} + {', '.join(p_names)}" if (dish_txt and p_names) else (dish_txt or ", ".join(p_names))
+                short_title = summarize_meal_title(dish_txt, dish_eval.get("components"), periphs)
+                display_txt = short_title if short_title else (", ".join(p_names) if p_names else "Repas")
                 update_meal_by_id(meal_id, display_txt, periphs, portion, assembled, user_id=uid)
                 summaries.append(f"Repas #{meal_id} mis a jour ({round(assembled['nutrients']['calories'])} kcal)")
 
