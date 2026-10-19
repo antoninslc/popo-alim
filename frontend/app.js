@@ -727,6 +727,13 @@ async function sendChatMessage(messageText) {
 }
 
 function initInteractions() {
+    const stickyContainer = document.querySelector(".spotlight-sticky-container");
+    if (stickyContainer) {
+        window.addEventListener("scroll", () => {
+            stickyContainer.classList.toggle("is-stuck", window.scrollY > 15);
+        }, { passive: true });
+    }
+
     document.getElementById("chat-form").addEventListener("submit", (e) => {
         e.preventDefault();
         const txt = document.getElementById("chat-input").value.trim();

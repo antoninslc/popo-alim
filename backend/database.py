@@ -208,7 +208,7 @@ def _migrate_sqlite_columns_if_needed(db: DBWrapper) -> None:
                         old_prof["custom_targets_json"],
                         old_prof.get("llm_provider", "auto"),
                         old_prof.get("api_key", ""),
-                        old_prof.get("llm_model", "gemini-2.0-flash"),
+                        old_prof.get("llm_model", "gemini-3.5-flash-lite"),
                     ),
                 )
 
@@ -240,7 +240,7 @@ def init_db(user_id: str = "default") -> None:
                 custom_targets_json TEXT NOT NULL DEFAULT '{}',
                 llm_provider TEXT NOT NULL DEFAULT 'auto',
                 api_key TEXT NOT NULL DEFAULT '',
-                llm_model TEXT NOT NULL DEFAULT 'gemini-2.0-flash'
+                llm_model TEXT NOT NULL DEFAULT 'gemini-3.5-flash-lite'
             )
             """
         )
@@ -365,7 +365,7 @@ def ensure_user_initialized(user_id: str = "default", db: Optional[DBWrapper] = 
                 user_id, sex, age, height_cm, weight_kg, activity_level, goal,
                 dietary_tags_json, excluded_foods, custom_targets_enabled,
                 custom_targets_json, llm_provider, api_key, llm_model
-            ) VALUES (?, ?, ?, ?, ?, 'modere', ?, '[]', '', 0, '{}', 'auto', '', 'gemini-2.0-flash')
+            ) VALUES (?, ?, ?, ?, ?, 'modere', ?, '[]', '', 0, '{}', 'auto', '', 'gemini-3.5-flash-lite')
             """,
             (uid, default_sex, default_age, default_height, default_weight, default_goal),
         )
@@ -605,7 +605,7 @@ def get_profile(user_id: str = "default") -> Dict[str, Any]:
         "llm_provider": row["llm_provider"] or "auto",
         "api_key_configured": bool((row["api_key"] or "").strip()),
         "api_key": row["api_key"] or "",
-        "llm_model": row["llm_model"] or "gemini-2.0-flash",
+        "llm_model": row["llm_model"] or "gemini-3.5-flash-lite",
     }
 
 
@@ -623,7 +623,7 @@ def update_profile(data: Dict[str, Any], user_id: str = "default") -> Dict[str, 
     custom_targets_enabled = 1 if data.get("custom_targets_enabled", current.get("custom_targets_enabled", False)) else 0
     custom_targets = data.get("custom_targets", current.get("custom_targets", {}))
     llm_provider = data.get("llm_provider", current.get("llm_provider", "auto"))
-    llm_model = data.get("llm_model", current.get("llm_model", "gemini-2.0-flash"))
+    llm_model = data.get("llm_model", current.get("llm_model", "gemini-3.5-flash-lite"))
 
     api_key = current.get("api_key", "")
     if "api_key" in data and data["api_key"] is not None:

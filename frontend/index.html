@@ -41,18 +41,19 @@
     <main class="container page-container">
         <!-- PAGE 1 : PRINCIPALE -->
         <section id="page-main" class="page-view active">
-            <!-- 1. HAUT : BARRE D'INTERACTION STYLE SPOTLIGHT + REPONSE UNIQUE -->
-            <section class="hero-chat-section">
-                <div class="hero-top-bar">
-                    <h1 class="hero-greeting" id="hero-greeting">Bonjour Pauline</h1>
-                    <button type="button" class="icon-gear-btn" id="open-settings-btn" aria-label="Ouvrir les réglages" title="Réglages">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                        </svg>
-                    </button>
-                </div>
+            <!-- 1. HAUT : SALUTATION & BOUTON REGLAGES -->
+            <div class="hero-top-bar">
+                <h1 class="hero-greeting" id="hero-greeting">Bonjour Pauline</h1>
+                <button type="button" class="icon-gear-btn" id="open-settings-btn" aria-label="Ouvrir les réglages" title="Réglages">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+            </div>
 
+            <!-- 2. BARRE D'INPUT IA FIGEE AU SCROLL -->
+            <div class="spotlight-sticky-container">
                 <form id="chat-form" class="spotlight-bar">
                     <input
                         type="text"
@@ -69,7 +70,10 @@
                         </svg>
                     </button>
                 </form>
+            </div>
 
+            <!-- 3. SUGGESTIONS & REPONSE ASSISTANT -->
+            <div class="hero-assistant-section">
                 <div class="suggestions-bar">
                     <button type="button" class="suggestion-chip" data-prompt="Que me conseilles-tu de manger au prochain repas pour combler mes lacunes ?">Idée pour le prochain repas</button>
                     <button type="button" class="suggestion-chip" data-prompt="Quels petits aliments simples puis-je ajouter pour corriger mes lacunes ?">Petits ajouts correcteurs</button>
@@ -84,7 +88,7 @@
                     <p class="assistant-message" id="ai-last-response-text">Chargement...</p>
                     <div class="chat-history-drawer hidden" id="chat-history-drawer"></div>
                 </div>
-            </section>
+            </div>
 
             <!-- 2. MILIEU : LES 10 BARRES D'INDICATEURS (MOYENNE 7J) -->
             <section class="apple-card indicators-section">
@@ -276,7 +280,7 @@
                             </div>
                             <div class="apple-field">
                                 <label for="prof-llm-model">Modèle</label>
-                                <input type="text" id="prof-llm-model" placeholder="gemini-2.0-flash">
+                                <input type="text" id="prof-llm-model" placeholder="gemini-3.5-flash-lite">
                             </div>
                         </div>
 

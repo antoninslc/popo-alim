@@ -31,7 +31,9 @@ from backend.database import (
     update_workout_status,
 )
 from backend.llm_service import (
+    DEFAULT_GEMINI_MODEL,
     _extract_peripherals_and_clean_dish,
+    _sanitize_llm_payload,
     call_llm_chat_agent,
     compose_contextual_reply,
     evaluate_dish_hybrid,
@@ -90,7 +92,7 @@ class ProfileUpdateInput(BaseModel):
     excluded_foods: str = ""
     llm_provider: str = "auto"
     api_key: Optional[str] = None
-    llm_model: str = "gemini-2.0-flash"
+    llm_model: str = DEFAULT_GEMINI_MODEL
     verify_llm: bool = True
 
 
@@ -172,13 +174,22 @@ def _execute_agent_actions(
                 periphs = [p for p in extra_periphs if p in PERIPHERALS_BY_ID]
 
             cached = get_cached_dish(dish_txt)
-            dish_eval = evaluate_dish_hybrid(
-                dish_txt,
-                cached,
-                profile,
-                meal_type=m_type,
-                already_peripherals=periphs,
-            )
+            inline_components = act.get("components")
+            if cached is None and dish_txt and isinstance(inline_components, list) and len(inline_components) > 0:
+                dish_eval = _sanitize_llm_payload(
+                    {"components": inline_components},
+                    dish_txt,
+                    meal_type=m_type,
+                    already_peripherals=periphs,
+                )
+            else:
+                dish_eval = evaluate_dish_hybrid(
+                    dish_txt,
+                    cached,
+                    profile,
+                    meal_type=m_type,
+                    already_peripherals=periphs,
+                )
             if dish_txt and cached is None and dish_eval.get("eval_source") != "peripheriques_seuls":
                 save_cached_dish(dish_txt, dish_eval)
 
@@ -214,13 +225,24 @@ def _execute_agent_actions(
                 cleaned_dish_txt, _ = _extract_peripherals_and_clean_dish(raw_dish_txt)
                 dish_txt = cleaned_dish_txt if periphs else raw_dish_txt
                 cached = get_cached_dish(dish_txt)
-                dish_eval = evaluate_dish_hybrid(
-                    dish_txt,
-                    cached,
-                    profile,
-                    meal_type=m_type,
-                    already_peripherals=periphs,
-                )
+                inline_components = act.get("components")
+                if cached is None and dish_txt and isinstance(inline_components, list) and len(inline_components) > 0:
+                    dish_eval = _sanitize_llm_payload(
+                        {"components": inline_components},
+                        dish_txt,
+                        meal_type=m_type,
+                        already_peripherals=periphs,
+                    )
+                else:
+                    dish_eval = evaluate_dish_hybrid(
+                        dish_txt,
+                        cached,
+                        profile,
+                        meal_type=m_type,
+                        already_peripherals=periphs,
+                    )
+                if dish_txt and cached is None and dish_eval.get("eval_source") != "peripheriques_seuls":
+                    save_cached_dish(dish_txt, dish_eval)
                 assembled = assemble_meal_evaluation(dish_eval, periphs, portion)
                 p_names = [PERIPHERALS_BY_ID[pid]["label"] for pid in periphs]
                 display_txt = f"{dish_txt} + {', '.join(p_names)}" if (dish_txt and p_names) else (dish_txt or ", ".join(p_names))
@@ -306,7 +328,7 @@ def api_chat(
     insert_chat_message("user", user_msg, user_id=uid)
 
     pre_state = build_full_state(uid)
-    profile = get_profile(uid)
+    profile = pre_state["profile"]
     meals = pre_state["meals"]
     workouts = pre_state["workouts"]
     dash = pre_state["dashboard"]
@@ -324,14 +346,14 @@ def api_chat(
     if llm_result and isinstance(llm_result, dict):
         actions = llm_result.get("actions") or []
         executed_summaries = _execute_agent_actions(actions, profile, meals, user_id=uid)
-        post_state = build_full_state(uid)
         reply_text = str(llm_result.get("reply") or "").strip()
         if not reply_text:
+            post_state = build_full_state(uid) if actions else pre_state
             reply_text = compose_contextual_reply(user_msg, executed_summaries, post_state["dashboard"])
     else:
         actions = interpret_chat_locally(user_msg, meals, workouts, date.today())
         executed_summaries = _execute_agent_actions(actions, profile, meals, user_id=uid)
-        post_state = build_full_state(uid)
+        post_state = build_full_state(uid) if actions else pre_state
         reply_text = compose_contextual_reply(user_msg, executed_summaries, post_state["dashboard"])
 
     summary_badge = " · ".join(executed_summaries) if executed_summaries else "Analyse & Conseil 7j"

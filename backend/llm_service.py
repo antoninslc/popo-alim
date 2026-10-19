@@ -16,6 +16,49 @@ from backend.nutrition_engine import (
 )
 
 
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+DEPRECATED_GEMINI_MODELS = {
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+}
+
+_SHARED_HTTP_CLIENT: Optional[httpx.Client] = None
+
+
+def _get_http_client() -> httpx.Client:
+    global _SHARED_HTTP_CLIENT
+    if _SHARED_HTTP_CLIENT is None or _SHARED_HTTP_CLIENT.is_closed:
+        _SHARED_HTTP_CLIENT = httpx.Client(
+            timeout=httpx.Timeout(12.0, connect=4.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=60.0),
+        )
+    return _SHARED_HTTP_CLIENT
+
+
+def _normalize_gemini_model(model_name: str) -> str:
+    clean = (model_name or "").strip()
+    if not clean or clean in DEPRECATED_GEMINI_MODELS:
+        return DEFAULT_GEMINI_MODEL
+    return clean
+
+
+def _build_gemini_generation_config(model_name: str, temperature: float = 0.1, json_mode: bool = True) -> Dict[str, Any]:
+    cfg: Dict[str, Any] = {"temperature": temperature}
+    if json_mode:
+        cfg["responseMimeType"] = "application/json"
+    if "3.5-flash-lite" in model_name:
+        cfg["thinkingConfig"] = {"thinkingLevel": "MINIMAL"}
+    elif "3.8-flash" in model_name:
+        cfg["thinkingConfig"] = {"thinkingLevel": "LOW"}
+    elif "3.1-flash-lite" in model_name:
+        cfg["thinkingConfig"] = {"thinkingBudget": 0}
+    return cfg
+
+
 SYSTEM_PROMPT_DISH_PARSER = """Tu es un nutritionniste du sport francophone expert en table Ciqual (ANSES) et en estimation réaliste des portions.
 L'utilisateur saisit l'intitulé d'un plat ou d'une collation.
 Règles strictes :
@@ -43,14 +86,47 @@ SYSTEM_PROMPT_CHAT_AGENT = """Tu es l'assistant nutritionnel et sportif qui pilo
 Tu dois analyser le message de l'utilisateur et retourner un objet JSON contenant :
 1. "actions" : liste d'opérations à exécuter sur la base de données (peut être vide si l'utilisateur pose seulement une question).
    Types d'actions possibles :
-   - {"type": "add_meal", "meal_date": "YYYY-MM-DD", "meal_type": "petit_dejeuner|dejeuner|gouter|collation|diner", "dish_text": "intitulé du plat SANS les éléments déjà placés dans peripherals", "peripherals": ["id_peripherique"], "portion_size": "leger|normal|copieux"}
-   - {"type": "update_meal", "meal_id": 12, "dish_text": "nouveau texte", "peripherals": ["id_peripherique"], "portion_size": "leger|normal|copieux"}
+   - {
+       "type": "add_meal",
+       "meal_date": "YYYY-MM-DD",
+       "meal_type": "petit_dejeuner|dejeuner|gouter|collation|diner",
+       "dish_text": "intitulé du plat SANS les éléments déjà placés dans peripherals",
+       "peripherals": ["id_peripherique"],
+       "portion_size": "leger|normal|copieux",
+       "components": [
+         {
+           "name": "Nom de la composante de dish_text et portion estimée en g (base Ciqual, hors périphériques)",
+           "nutrients": {
+             "calories": 0, "proteins": 0, "carbs": 0, "lipids": 0,
+             "fiber": 0, "omega3": 0, "iron": 0, "magnesium": 0, "calcium": 0
+           }
+         }
+       ]
+     }
+   - {
+       "type": "update_meal",
+       "meal_id": 12,
+       "dish_text": "nouveau texte SANS les périphériques",
+       "peripherals": ["id_peripherique"],
+       "portion_size": "leger|normal|copieux",
+       "components": [
+         {
+           "name": "Nom de la composante de dish_text et portion estimée en g (hors périphériques)",
+           "nutrients": {
+             "calories": 0, "proteins": 0, "carbs": 0, "lipids": 0,
+             "fiber": 0, "omega3": 0, "iron": 0, "magnesium": 0, "calcium": 0
+           }
+         }
+       ]
+     }
    - {"type": "delete_meal", "meal_id": 12}
    - {"type": "add_workout", "workout_date": "YYYY-MM-DD", "category": "endurance|force|hiit_sport_co|velo_natation|mobilite_marche", "title": "Titre propre", "duration_min": 60, "intensity": "douce|moderee|intense", "status": "realisee|prevue"}
    - {"type": "update_workout_status", "workout_id": 5, "status": "realisee|prevue"}
    - {"type": "delete_workout", "workout_id": 5}
    - {"type": "update_profile", "weight_kg": 74.0, "goal": "maintien|performance|prise_masse|seche"}
-   IMPORTANT pour add_meal / update_meal : Si tu ajoutes un périphérique dans "peripherals" (ex: "fromage_blanc" pour du skyr, "banane" pour une banane), retire-le impérativement de "dish_text" pour qu'il ne soit jamais compté deux fois. Si tout le repas est couvert par "dish_text", laisse "peripherals": [].
+   RÈGLES NUTRITIONNELLES IMPORTANTES pour add_meal / update_meal :
+   - Si tu ajoutes un périphérique dans "peripherals" (ex: "fromage_blanc" pour du skyr, "banane" pour une banane), retire-le impérativement de "dish_text" ET de "components" pour qu'il ne soit jamais compté deux fois.
+   - Si "dish_text" est non vide, fournis TOUJOURS "components" avec l'estimation Ciqual réaliste de chaque ingrédient principal (respecte les quantités : ex 100g viande/poisson cuit ≈ 24-28g protéines, 1 œuf ≈ 6.5g protéines, 1 gaufre ≈ 3g protéines, calories ≈ P*4 + G*4 + L*9 + Fibres*2). Si tout le repas est couvert par "peripherals", laisse "dish_text": "" et "components": [].
 2. "reply" : ta réponse directe à l'utilisateur en français (2 à 4 phrases maximum, ton sobre, précis, sans aucun emoji ni jargon IA). Confirme ce que tu viens d'enregistrer/modifier, commente son positionnement sur la moyenne glissante de 7 jours et propose des exemples concrets de plats ou d'aliments pour combler ses lacunes ou préparer ses séances prévues.
 
 IDs des périphériques disponibles :
@@ -114,7 +190,7 @@ def _load_dotenv_if_present() -> None:
                 k, v = line.split("=", 1)
                 key = k.strip()
                 val = v.strip().strip('"').strip("'")
-                if key and key not in os.environ:
+                if key:
                     os.environ[key] = val
     except Exception:
         pass
@@ -140,7 +216,10 @@ def _resolve_provider_and_key(profile_settings: Dict[str, Any]) -> Tuple[str, st
     _load_dotenv_if_present()
     provider = (profile_settings.get("llm_provider") or "auto").lower().strip()
     api_key = (profile_settings.get("api_key") or "").strip()
-    model_name = (profile_settings.get("llm_model") or os.environ.get("GEMINI_MODEL") or "").strip()
+    raw_model = (profile_settings.get("llm_model") or "").strip()
+    if not raw_model or raw_model in DEPRECATED_GEMINI_MODELS:
+        raw_model = (os.environ.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL).strip()
+    model_name = _normalize_gemini_model(raw_model)
 
     if not api_key:
         env_gemini = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
@@ -174,39 +253,40 @@ def _resolve_provider_and_key(profile_settings: Dict[str, Any]) -> Tuple[str, st
 def _call_gemini_api(
     dish_text: str,
     api_key: str,
-    model: str = "gemini-2.0-flash",
+    model: str = DEFAULT_GEMINI_MODEL,
     meal_type: str = "dejeuner",
     already_peripherals: Optional[List[str]] = None,
 ) -> Optional[Dict[str, Any]]:
-    models_to_try = [model] if model == "gemini-2.0-flash" else [model, "gemini-2.0-flash"]
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": f"{SYSTEM_PROMPT_DISH_PARSER}\n\nPlat saisi : {dish_text}"}],
-            }
-        ],
-        "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"},
-    }
-    with httpx.Client(timeout=12.0) as client:
-        for candidate_model in models_to_try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent?key={api_key}"
-            resp = client.post(url, json=payload)
-            if resp.status_code == 404 and candidate_model != "gemini-2.0-flash":
-                continue
-            resp.raise_for_status()
-            data = resp.json()
-            candidates = data.get("candidates", [])
-            if not candidates:
-                return None
-            text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-            parsed = _extract_json_object(text_out)
-            return _sanitize_llm_payload(
-                parsed,
-                dish_text,
-                meal_type=meal_type,
-                already_peripherals=already_peripherals,
-            )
+    norm_model = _normalize_gemini_model(model)
+    models_to_try = [norm_model] if norm_model == DEFAULT_GEMINI_MODEL else [norm_model, DEFAULT_GEMINI_MODEL]
+    client = _get_http_client()
+    for candidate_model in models_to_try:
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": f"{SYSTEM_PROMPT_DISH_PARSER}\n\nPlat saisi : {dish_text}"}],
+                }
+            ],
+            "generationConfig": _build_gemini_generation_config(candidate_model, temperature=0.1, json_mode=True),
+        }
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent?key={api_key}"
+        resp = client.post(url, json=payload)
+        if resp.status_code in (404, 503) and candidate_model != DEFAULT_GEMINI_MODEL:
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        candidates = data.get("candidates", [])
+        if not candidates:
+            return None
+        text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        parsed = _extract_json_object(text_out)
+        return _sanitize_llm_payload(
+            parsed,
+            dish_text,
+            meal_type=meal_type,
+            already_peripherals=already_peripherals,
+        )
     return None
 
 
@@ -227,15 +307,15 @@ def _call_openai_compatible_json(
             {"role": "user", "content": user_prompt},
         ],
     }
-    with httpx.Client(timeout=14.0) as client:
-        payload_with_fmt = dict(base_payload, response_format={"type": "json_object"})
-        resp = client.post(url, headers=headers, json=payload_with_fmt)
-        if resp.status_code >= 400:
-            resp = client.post(url, headers=headers, json=base_payload)
-        resp.raise_for_status()
-        data = resp.json()
-        text_out = data["choices"][0]["message"]["content"]
-        return _extract_json_object(text_out)
+    client = _get_http_client()
+    payload_with_fmt = dict(base_payload, response_format={"type": "json_object"})
+    resp = client.post(url, headers=headers, json=payload_with_fmt)
+    if resp.status_code >= 400:
+        resp = client.post(url, headers=headers, json=base_payload)
+    resp.raise_for_status()
+    data = resp.json()
+    text_out = data["choices"][0]["message"]["content"]
+    return _extract_json_object(text_out)
 
 
 def verify_llm_connection(profile_settings: Dict[str, Any]) -> Dict[str, Any]:
@@ -247,6 +327,7 @@ def verify_llm_connection(profile_settings: Dict[str, Any]) -> Dict[str, Any]:
             "message": "Réglages enregistrés. Mode hybride local actif (aucune clé API).",
         }
 
+    client = _get_http_client()
     try:
         if provider in OPENAI_COMPATIBLE_PROVIDERS:
             endpoint_url, default_model = OPENAI_COMPATIBLE_PROVIDERS[provider]
@@ -256,55 +337,56 @@ def verify_llm_connection(profile_settings: Dict[str, Any]) -> Dict[str, Any]:
                 "model": target_model,
                 "messages": [{"role": "user", "content": "Reponds uniquement par: {\"ok\": true}"}],
             }
-            with httpx.Client(timeout=8.0) as client:
-                resp = client.post(endpoint_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    return {
-                        "ok": True,
-                        "mode": provider,
-                        "message": f"Clé API enregistrée et validée avec succès ({provider} / {target_model}).",
-                    }
-                if resp.status_code == 403 and "FreeTierError" in resp.text:
-                    return {
-                        "ok": False,
-                        "mode": provider,
-                        "message": "Clé bien enregistrée, mais OpenCode bloque l'accès gratuit aux applications tierces (FreeTierError). Utilisez une clé Google Gemini Studio (AIza...) ou Groq (gsk_...) pour un accès 100% gratuit sans blocage.",
-                    }
-                if resp.status_code == 402:
-                    return {
-                        "ok": False,
-                        "mode": provider,
-                        "message": "Clé bien enregistrée, mais solde insuffisant ($0.00) sur ce modèle payant.",
-                    }
+            resp = client.post(endpoint_url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                return {
+                    "ok": True,
+                    "mode": provider,
+                    "message": f"Clé API enregistrée et validée avec succès ({provider} / {target_model}).",
+                }
+            if resp.status_code == 403 and "FreeTierError" in resp.text:
                 return {
                     "ok": False,
                     "mode": provider,
-                    "message": f"Clé enregistrée, mais le serveur {provider} a répondu HTTP {resp.status_code}.",
+                    "message": "Clé bien enregistrée, mais OpenCode bloque l'accès gratuit aux applications tierces (FreeTierError). Utilisez une clé Google Gemini Studio (AIza...) ou Groq (gsk_...) pour un accès 100% gratuit sans blocage.",
                 }
-        else:
-            target_model = model_name if model_name else "gemini-2.0-flash"
-            models_to_try = [target_model] if target_model == "gemini-2.0-flash" else [target_model, "gemini-2.0-flash"]
-            payload = {"contents": [{"role": "user", "parts": [{"text": "Ok"}]}]}
-            with httpx.Client(timeout=8.0) as client:
-                last_status = 0
-                for candidate_model in models_to_try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent?key={api_key}"
-                    resp = client.post(url, json=payload)
-                    last_status = resp.status_code
-                    if resp.status_code == 200:
-                        return {
-                            "ok": True,
-                            "mode": "gemini",
-                            "resolved_model": candidate_model,
-                            "message": f"Cle API Gemini enregistree et validee avec succes ({candidate_model}).",
-                        }
-                    if resp.status_code == 404 and candidate_model != "gemini-2.0-flash":
-                        continue
+            if resp.status_code == 402:
                 return {
                     "ok": False,
-                    "mode": "gemini",
-                    "message": f"Cle enregistree, mais Google Gemini a repondu HTTP {last_status}.",
+                    "mode": provider,
+                    "message": "Clé bien enregistrée, mais solde insuffisant ($0.00) sur ce modèle payant.",
                 }
+            return {
+                "ok": False,
+                "mode": provider,
+                "message": f"Clé enregistrée, mais le serveur {provider} a répondu HTTP {resp.status_code}.",
+            }
+        else:
+            target_model = _normalize_gemini_model(model_name)
+            models_to_try = [target_model] if target_model == DEFAULT_GEMINI_MODEL else [target_model, DEFAULT_GEMINI_MODEL]
+            last_status = 0
+            for candidate_model in models_to_try:
+                payload = {
+                    "contents": [{"role": "user", "parts": [{"text": "Ok"}]}],
+                    "generationConfig": _build_gemini_generation_config(candidate_model, temperature=0.1, json_mode=False),
+                }
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent?key={api_key}"
+                resp = client.post(url, json=payload)
+                last_status = resp.status_code
+                if resp.status_code == 200:
+                    return {
+                        "ok": True,
+                        "mode": "gemini",
+                        "resolved_model": candidate_model,
+                        "message": f"Cle API Gemini enregistree et validee avec succes ({candidate_model}).",
+                    }
+                if resp.status_code in (404, 503) and candidate_model != DEFAULT_GEMINI_MODEL:
+                    continue
+            return {
+                "ok": False,
+                "mode": "gemini",
+                "message": f"Cle enregistree, mais Google Gemini a repondu HTTP {last_status}.",
+            }
     except Exception as exc:
         return {
             "ok": False,
@@ -358,7 +440,7 @@ def evaluate_dish_hybrid(
                         already_peripherals=already_peripherals,
                     )
             else:
-                target_model = model_name if model_name else "gemini-2.0-flash"
+                target_model = _normalize_gemini_model(model_name)
                 res = _call_gemini_api(
                     dish_text,
                     api_key,
@@ -746,30 +828,30 @@ def call_llm_chat_agent(
                 temperature=0.2,
             )
         else:
-            target_model = model_name if model_name else "gemini-2.0-flash"
-            models_to_try = [target_model] if target_model == "gemini-2.0-flash" else [target_model, "gemini-2.0-flash"]
-            payload = {
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [{"text": f"{SYSTEM_PROMPT_CHAT_AGENT}\n\n{full_user_prompt}"}],
-                    }
-                ],
-                "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
-            }
-            with httpx.Client(timeout=14.0) as client:
-                for candidate_model in models_to_try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent?key={api_key}"
-                    resp = client.post(url, json=payload)
-                    if resp.status_code == 404 and candidate_model != "gemini-2.0-flash":
-                        continue
-                    resp.raise_for_status()
-                    data = resp.json()
-                    candidates = data.get("candidates", [])
-                    if not candidates:
-                        return None
-                    text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                    return _extract_json_object(text_out)
+            target_model = _normalize_gemini_model(model_name)
+            models_to_try = [target_model] if target_model == DEFAULT_GEMINI_MODEL else [target_model, DEFAULT_GEMINI_MODEL]
+            client = _get_http_client()
+            for candidate_model in models_to_try:
+                payload = {
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": [{"text": f"{SYSTEM_PROMPT_CHAT_AGENT}\n\n{full_user_prompt}"}],
+                        }
+                    ],
+                    "generationConfig": _build_gemini_generation_config(candidate_model, temperature=0.2, json_mode=True),
+                }
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent?key={api_key}"
+                resp = client.post(url, json=payload)
+                if resp.status_code in (404, 503) and candidate_model != DEFAULT_GEMINI_MODEL:
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    return None
+                text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                return _extract_json_object(text_out)
             return None
     except Exception:
         return None
